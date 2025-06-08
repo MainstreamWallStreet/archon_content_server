@@ -1,6 +1,6 @@
 substitutions:
   _REGION: us-central1
-  _PIPELINE: ffs-pipeline
+  _PIPELINE: banshee-pipeline
 
 steps:
   # 1. Build image
@@ -12,7 +12,7 @@ steps:
       - '-f'
       - Dockerfile
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/filing-fetcher-api/filing-fetcher-api:$BUILD_ID'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/banshee/banshee:$BUILD_ID'
       - '.'
 
   # 2. Push
@@ -20,9 +20,9 @@ steps:
     name: gcr.io/cloud-builders/docker
     args:
       - push
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/filing-fetcher-api/filing-fetcher-api:$BUILD_ID'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/banshee/banshee:$BUILD_ID'
 
-  # 3. Cloud Deploy release
+  # 3. Cloud Deploy release
   - id: Release
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
@@ -33,9 +33,9 @@ steps:
       - 'rel-$BUILD_ID'
       - '--delivery-pipeline=${_PIPELINE}'
       - '--region=${_REGION}'
-      - '--images=api-image=${_REGION}-docker.pkg.dev/$PROJECT_ID/filing-fetcher-api/filing-fetcher-api:$BUILD_ID'
+      - '--images=api-image=${_REGION}-docker.pkg.dev/$PROJECT_ID/banshee/banshee:$BUILD_ID'
 
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/filing-fetcher-api/filing-fetcher-api:$BUILD_ID'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/banshee/banshee:$BUILD_ID'
 
 timeout: '900s'
