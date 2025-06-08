@@ -1,3 +1,3 @@
 """
-Raven - SEC Filing Analyzer
+Banshee - Notification Engine
 """

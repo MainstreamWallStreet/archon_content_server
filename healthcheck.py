@@ -1,6 +1,6 @@
 import requests
 
-URL = "https://raven-api-gl7hc5q6rq-uc.a.run.app/health"
+URL = "https://banshee-455624753981.us-central1.run.app/health"
 
 
 def test_health() -> bool:
@@ -18,6 +18,6 @@ def test_health() -> bool:
 
 
 if __name__ == "__main__":
-    print("Testing Raven API health endpoint...")
+    print("Testing Banshee API health endpoint...")
     success = test_health()
     print(f"\nTest {'passed' if success else 'failed'}")

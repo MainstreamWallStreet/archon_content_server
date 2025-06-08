@@ -2,7 +2,7 @@
 """FastAPI application for Banshee – Automated Earnings Call Tracking System.
 
 Banshee continuously monitors a global watchlist of ticker symbols, automatically
-fetching upcoming earnings calls from API Ninjas, scheduling SMS alerts via Twilio,
+fetching upcoming earnings calls from API Ninjas, scheduling email alerts via Twilio,
 and orchestrating transcript processing through the Raven API.
 
 The system operates through scheduled Cloud Tasks and maintains state in Google
@@ -109,7 +109,7 @@ Banshee continuously monitors upcoming earnings conference calls for every ticke
 
 Banshee tracks earnings calls across your entire portfolio, ensuring you never miss important corporate communications by providing:
 - **Automated watchlist management** for ticker symbols
-- **Proactive SMS alerts** (7 days before + day of earnings)
+- **Proactive email alerts** (7 days before + day of earnings)
 - **Intelligent transcript processing** via integration with Raven API
 - **Rate limit monitoring** and admin notifications
 
@@ -119,9 +119,9 @@ Banshee tracks earnings calls across your entire portfolio, ensuring you never m
 *Triggered: 05:00 EST daily via Cloud Scheduler*
 - Fetches upcoming earnings from API Ninjas for all watchlist tickers
 - Persists call schedules to `gs://banshee-data/earnings_queue/`
-- Automatically schedules SMS reminder workflows
+- Automatically schedules email reminder workflows
 
-### 2️⃣ **Smart SMS Alerts**
+### 2️⃣ **Smart email Alerts**
 *Triggered: Immediately after watchlist sync*
 - **-7 Days @ 09:00 EST**: "AAPL earnings call in 1 week (Jul 30)"
 - **Day-of @ 06:00 EST**: "AAPL earnings call today at 2:00 PM"
@@ -130,12 +130,12 @@ Banshee tracks earnings calls across your entire portfolio, ensuring you never m
 ### 3️⃣ **Transcript Processing**
 *Triggered: Every 30 minutes on call dates*
 - Monitors for published SEC transcripts/audio
-- Automatically calls Raven API: `https://filing-fetcher-api-455624753981.us-central1.run.app/process`
+- Automatically calls Raven API for transcript processing
 - Handles authentication and job tracking
 
 ### 4️⃣ **Completion Notifications**
 *Triggered: Raven success callbacks*
-- Confirms transcript capture via SMS
+- Confirms transcript capture via email
 - Updates call status to `transcript_saved`
 - Provides direct links to processed documents
 
@@ -190,9 +190,9 @@ gs://banshee-data/
 **External Services:**
 - **API Ninjas**: Earnings calendar data (`/v1/earningscalendar`)
 - **Raven API**: Transcript processing (shared API key in Secret Manager)
-- **Twilio**: SMS delivery (account SID, auth token, from number)
+- **Twilio**: email delivery (account SID, auth token, from number)
 
-## 📱 SMS Alert Examples
+## 📱 email Alert Examples
 
 ```
 "📊 AAPL earnings call in 7 days (Jul 30 @ 2:00 PM EST)"
@@ -204,7 +204,7 @@ gs://banshee-data/
 ## ⚡ Built for Scale
 
 - **Cloud Scheduler**: Reliable cron execution
-- **Cloud Tasks**: Fault-tolerant SMS delivery  
+- **Cloud Tasks**: Fault-tolerant email delivery  
 - **Secret Manager**: Secure credential storage
 - **GCS**: Durable state management with versioning
 - **Terraform**: Infrastructure as code
