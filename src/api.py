@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""FastAPI application for FFS – SEC Filing Analyzer.
+"""FastAPI application for Banshee – Automated Earnings Call Tracking System.
+
+Banshee continuously monitors a global watchlist of ticker symbols, automatically
+fetching upcoming earnings calls from API Ninjas, scheduling SMS alerts via Twilio,
+and orchestrating transcript processing through the Raven API.
+
+The system operates through scheduled Cloud Tasks and maintains state in Google
+Cloud Storage, providing a complete earnings call monitoring solution for
+portfolio managers and financial analysts.
 
 Jobs are placed onto a global :class:`asyncio.Queue` (named ``task_queue``)
 and processed by up to ``MAX_CONCURRENT_JOBS`` background workers.  This
@@ -40,7 +48,7 @@ log = logging.getLogger("worker")
 # 🔐  Auth
 # ────────────────────────────
 AUTH_HEADER_NAME = "X-API-Key"
-AUTH_TOKEN_KEY = "FFS_API_KEY"
+AUTH_TOKEN_KEY = "BANSHEE_API_KEY"
 
 api_key_header = APIKeyHeader(name=AUTH_HEADER_NAME, auto_error=True)
 
@@ -92,31 +100,118 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Filing-Fetcher API",
-    description="""**Raven API for SEC Filings and Earnings Call Transcripts**
+    title="Banshee API",
+    description="""**Banshee - Automated Earnings Call Tracking & Alert System**
 
-This API allows you to:
+Banshee continuously monitors upcoming earnings conference calls for every ticker in a global watchlist, automatically scheduling alerts and orchestrating transcript processing through the Raven service.
 
-*   **Process SEC filings (10-K, 10-Q) and earnings call transcripts for a given company and period.**
-    *   Jobs are added to a queue and processed sequentially.
-    *   The system fetches data from SEC EDGAR and API Ninjas.
-    *   LLMs are used to reason over the content.
-    *   Structured outputs are stored in Google Drive.
-    *   All jobs require a `point_of_origin` to track which service initiated the request.
-    *   Transcript URLs are stored in job metadata and accessible via the `/updates` endpoint.
-*   **Monitor job status and queue length.**
-    *   The `/updates` endpoint provides real-time status of all jobs.
-    *   Each job includes its point of origin, transcript URL (if available), and detailed timing information.
-*   **Stream real-time updates on job processing.**
-    *   Jobs are persisted in Google Cloud Storage.
-    *   Status updates include transcript URLs and processing timestamps.
-    *   All jobs are tracked with their origin service for better monitoring.
+## 🎯 Core Mission
 
-Authentication is handled via an API key passed in the `X-API-Key` header.
+Banshee tracks earnings calls across your entire portfolio, ensuring you never miss important corporate communications by providing:
+- **Automated watchlist management** for ticker symbols
+- **Proactive SMS alerts** (7 days before + day of earnings)
+- **Intelligent transcript processing** via integration with Raven API
+- **Rate limit monitoring** and admin notifications
 
-The API is designed to be robust and respectful of external service rate limits.
+## 🔄 Automated Workflows
+
+### 1️⃣ **Daily Watchlist Sync** 
+*Triggered: 05:00 EST daily via Cloud Scheduler*
+- Fetches upcoming earnings from API Ninjas for all watchlist tickers
+- Persists call schedules to `gs://banshee-data/earnings_queue/`
+- Automatically schedules SMS reminder workflows
+
+### 2️⃣ **Smart SMS Alerts**
+*Triggered: Immediately after watchlist sync*
+- **-7 Days @ 09:00 EST**: "AAPL earnings call in 1 week (Jul 30)"
+- **Day-of @ 06:00 EST**: "AAPL earnings call today at 2:00 PM"
+- Uses Cloud Tasks → Twilio for reliable delivery
+
+### 3️⃣ **Transcript Processing**
+*Triggered: Every 30 minutes on call dates*
+- Monitors for published SEC transcripts/audio
+- Automatically calls Raven API: `https://filing-fetcher-api-455624753981.us-central1.run.app/process`
+- Handles authentication and job tracking
+
+### 4️⃣ **Completion Notifications**
+*Triggered: Raven success callbacks*
+- Confirms transcript capture via SMS
+- Updates call status to `transcript_saved`
+- Provides direct links to processed documents
+
+### 5️⃣ **Rate Limit Protection**
+*Triggered: After each API call*
+- Logs all API Ninjas requests to `gs://banshee-data/api_calls/`
+- Sends admin alerts at ≥50,000 monthly requests
+- Prevents quota overruns and service disruptions
+
+## 📊 Data Architecture
+
+**GCS Storage Layout:**
+```
+gs://banshee-data/
+├── watchlist/           # Ticker management
+│   ├── AAPL.json       # Per-ticker metadata
+│   └── MSFT.json
+├── earnings_queue/      # Scheduled calls
+│   └── AAPL/2025-07-30.json
+├── api_calls/2025-06.csv # Rate limiting log
+└── tmp/                 # Processing workspace
+```
+
+**Call Status Flow:**
+`scheduled` → `reminded-7d` → `reminded-day` → `sent_to_raven` → `transcript_saved`
+
+## 🔌 API Endpoints
+
+### Watchlist Management
+- **GET /watchlist**: List all tracked tickers
+- **POST /watchlist**: Add ticker to monitoring
+- **DELETE /watchlist/{ticker}**: Remove ticker
+
+### Earnings Queue
+- **GET /earnings/upcoming**: View scheduled calls
+- **GET /earnings/{ticker}**: Ticker-specific schedule
+- **PATCH /earnings/{ticker}/{date}**: Update call status
+
+### Automation Tasks
+- **POST /tasks/daily-sync**: Manual watchlist sync
+- **POST /tasks/intraday**: Check for new transcripts
+- **GET /tasks/status**: Task execution history
+
+### Monitoring
+- **GET /stats/api-usage**: Current month's API call stats
+- **GET /health**: Service health + integration status
+
+## 🔐 Security & Integration
+
+**Authentication:** API key via `X-API-Key` header (managed by Archon proxy)
+
+**External Services:**
+- **API Ninjas**: Earnings calendar data (`/v1/earningscalendar`)
+- **Raven API**: Transcript processing (shared API key in Secret Manager)
+- **Twilio**: SMS delivery (account SID, auth token, from number)
+
+## 📱 SMS Alert Examples
+
+```
+"📊 AAPL earnings call in 7 days (Jul 30 @ 2:00 PM EST)"
+"🚨 AAPL earnings call TODAY at 2:00 PM EST"
+"✅ AAPL Q2 transcript processed: [link]"
+"⚠️ API usage at 48K/50K limit"
+```
+
+## ⚡ Built for Scale
+
+- **Cloud Scheduler**: Reliable cron execution
+- **Cloud Tasks**: Fault-tolerant SMS delivery  
+- **Secret Manager**: Secure credential storage
+- **GCS**: Durable state management with versioning
+- **Terraform**: Infrastructure as code
+
+Perfect for portfolio managers, analysts, and anyone who needs systematic earnings call coverage.
 """,
-    version="1.4.0",
+    version="1.0.0",
     lifespan=lifespan,
 )
 
