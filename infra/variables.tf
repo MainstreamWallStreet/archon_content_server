@@ -1,7 +1,7 @@
 variable "project" {}
 variable "region" { default = "us-central1" }
 variable "github_owner" { default = "MainstreamWallStreet" }
-variable "github_repo" { default = "banshee-server" }
+variable "github_repo" { default = "banshee-server-rebuild" }
 
 # Application configuration
 variable "image" {
@@ -51,4 +51,5 @@ variable "google_sa_value" {
 variable "alert_from_email" {
   description = "Email address to send alerts from"
   type        = string
+  default     = "gclark0812@gmail.com"
 }

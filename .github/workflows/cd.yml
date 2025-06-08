@@ -18,7 +18,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: >-
-            projects/mainstreamwallstreet/locations/global/workloadIdentityPools/banshee-github-pool-v2/providers/banshee-github-provider
+            projects/mainstreamwallstreet/locations/global/workloadIdentityPools/banshee-github-pool-v3/providers/banshee-github-provider
           service_account: cloud-run-banshee-sa@mainstreamwallstreet.iam.gserviceaccount.com
 
       # OPTIONAL debug – now the token exists
