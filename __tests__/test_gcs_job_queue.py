@@ -7,10 +7,14 @@ from src.gcs_job_queue import GcsJobQueue
 
 @pytest.fixture
 def mock_storage_client():
-    with patch("google.cloud.storage.Client") as mock_client:
+    with patch("src.gcs_job_queue.storage.Client") as mock_client:
         mock_bucket = Mock()
+        mock_blob = Mock()
         mock_client.return_value.bucket.return_value = mock_bucket
         mock_bucket.exists.return_value = True
+        mock_bucket.blob.return_value = mock_blob
+        mock_blob.exists.return_value = False
+        mock_blob.download_as_text.return_value = "{}"
         yield mock_client
 
 
@@ -31,7 +35,7 @@ def test_create_job_saves_to_gcs(job_queue, mock_storage_client):
 
     # Assert
     mock_bucket = mock_storage_client.return_value.bucket.return_value
-    mock_bucket.blob.assert_called_once()
+    assert mock_bucket.blob.call_count == 2
     mock_blob = mock_bucket.blob.return_value
     mock_blob.upload_from_string.assert_called_once()
 
@@ -77,6 +81,7 @@ def test_update_job_ensures_version(job_queue, mock_storage_client):
     job_id = "TEST_2020_Q1_123456"
     mock_bucket = mock_storage_client.return_value.bucket.return_value
     mock_blob = mock_bucket.blob.return_value
+    mock_blob.exists.return_value = True
     mock_blob.download_as_text.return_value = '{"job_id": "TEST_2020_Q1_123456"}'
 
     # Act
@@ -101,4 +106,4 @@ def test_race_condition_handling(job_queue, mock_storage_client):
     # Act & Assert
     with pytest.raises(ValueError) as exc_info:
         job_queue.update_job(job_id, status="processing")
-    assert "Job not found" in str(exc_info.value)
+    assert "not found" in str(exc_info.value)

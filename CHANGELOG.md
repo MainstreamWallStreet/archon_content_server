@@ -32,6 +32,7 @@
   - Added pytest-asyncio configuration for async test support.
 ### Removed
 - Deprecated `/status/{job_id}`, `/jobs`, `/stream/jobs`, and `/stream/tasks` endpoints.
+- Legacy Raven tests replaced with Banshee-specific suite.
 
 ### Fixed
 - Avoid duplicate company folders when processing multiple quarters concurrently.
@@ -41,6 +42,7 @@
 - Table rows returned as dicts are now expanded correctly.
 - OpenAI calls now retry on transient errors.
 - Quarter processing continues after individual failures.
+- GCS job queue tests updated and SendGrid mock added.
 - **Test reliability:**
   - Fixed `test_list_all_jobs` to avoid counting jobs from previous runs by cleaning up the GCS bucket and using unique origins.
   - Updated Pydantic model usage to use `model_dump()` instead of deprecated `dict()` method.
