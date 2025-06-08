@@ -1,6 +1,6 @@
 substitutions:
   _REGION: us-central1
-  _PIPELINE: banshee-pipeline
+  _PIPELINE: ffs-pipeline
 
 steps:
   # 1. Build image
