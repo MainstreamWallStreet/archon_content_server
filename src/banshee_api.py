@@ -7,6 +7,8 @@ from fastapi import Depends, FastAPI, HTTPException, Security
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 
+from src.notifications import send_alert
+
 from src.config import get_setting
 from src.banshee_watchlist import BansheeStore
 
@@ -29,6 +31,13 @@ class TickerPayload(BaseModel):
     user: str
 
 
+class AlertPayload(BaseModel):
+    """Data required for sending a global alert."""
+
+    subject: str
+    message: str
+
+
 @app.get("/watchlist")
 def read_watchlist(_: str = Depends(validate_key)) -> dict[str, List[str]]:
     return {"tickers": store.list_tickers()}
@@ -46,6 +55,16 @@ def create_watchlist(
 def delete_watchlist(ticker: str, _: str = Depends(validate_key)) -> dict[str, str]:
     store.remove_ticker(ticker)
     return {"message": "removed"}
+
+
+@app.post("/send-global-alert")
+def send_global_alert(
+    payload: AlertPayload, _: str = Depends(validate_key)
+) -> dict[str, str]:
+    """Send an alert email to all configured recipients."""
+
+    send_alert(payload.subject, payload.message)
+    return {"status": "sent"}
 
 
 async def _fetch_api_ninjas(ticker: str) -> list[dict]:

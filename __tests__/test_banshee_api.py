@@ -26,3 +26,18 @@ def test_add_watchlist_endpoint():
         )
         assert resp.status_code == 200
         store.add_ticker.assert_called_with("MSFT", "griffin")
+
+
+def test_send_global_alert_endpoint():
+    with patch("src.banshee_api.send_alert") as send_alert:
+        client = TestClient(app)
+        payload = {"subject": "Hello", "message": "World"}
+        resp = client.post("/send-global-alert", headers=HEADERS, json=payload)
+        assert resp.status_code == 200
+        send_alert.assert_called_with("Hello", "World")
+
+
+def test_send_global_alert_requires_auth():
+    client = TestClient(app)
+    resp = client.post("/send-global-alert", json={"subject": "sub", "message": "body"})
+    assert resp.status_code == 403
