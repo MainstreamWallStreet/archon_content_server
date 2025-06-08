@@ -63,7 +63,7 @@ resource "google_iam_workload_identity_pool_provider" "github_provider_v3" {
 resource "google_service_account_iam_member" "github_wif" {
   service_account_id = google_service_account.cloud_run_sa.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/attribute.repository/${var.github_owner}/${var.github_repo}"
+  member             = "principalSet://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${google_iam_workload_identity_pool.github_pool.workload_identity_pool_id}/attribute.repository/${var.github_owner}/${var.github_repo}"
 }
 
 # Cloud Deploy target and pipeline
