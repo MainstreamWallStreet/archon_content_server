@@ -57,7 +57,7 @@ resource "google_iam_workload_identity_pool_provider" "github_provider_v3" {
 
   oidc { issuer_uri = "https://token.actions.githubusercontent.com" }
 
-  attribute_condition = "attribute.repository == \"${var.github_owner}/${var.github_repo}\""
+  attribute_condition = "attribute.repository == \"MainstreamWallStreet/banshee-server-rebuild\" || attribute.repository == \"mainstreamwallstreet/banshee-server-rebuild\""
 }
 
 resource "google_service_account_iam_member" "github_wif" {
