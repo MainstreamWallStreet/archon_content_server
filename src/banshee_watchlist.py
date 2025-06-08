@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any, Dict, List
 
 from google.cloud import storage
 from google.cloud.exceptions import GoogleCloudError
+from src.notifications import send_alert
 
 
 class BansheeStore:
@@ -45,6 +46,8 @@ class BansheeStore:
         }
         try:
             blob.upload_from_string(json.dumps(obj), if_generation_match=0)
+            utc_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            send_alert(f"Ticker {ticker.upper()} Added to Watchlist", f"Ticker {ticker.upper()} was added to the watchlist by {user} at {utc_time}.")
         except GoogleCloudError as exc:
             raise RuntimeError(f"Failed to add ticker {ticker}: {exc}") from exc
 
@@ -53,6 +56,8 @@ class BansheeStore:
         blob = self._bucket.blob(f"watchlist/{ticker.upper()}.json")
         try:
             blob.delete()
+            utc_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            send_alert(f"Ticker {ticker.upper()} Removed from Watchlist", f"Ticker {ticker.upper()} was removed from the watchlist at {utc_time}.")
         except GoogleCloudError as exc:
             raise RuntimeError(f"Failed to remove ticker {ticker}: {exc}") from exc
 
