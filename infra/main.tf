@@ -41,7 +41,7 @@ resource "google_artifact_registry_repository_iam_member" "cloudbuild_writer" {
 
 # Workload Identity Pool and provider
 resource "google_iam_workload_identity_pool" "github_pool" {
-  workload_identity_pool_id = "banshee-github-pool"
+  workload_identity_pool_id = "banshee-github-pool-v3"
   display_name              = "Banshee GitHub Actions Pool"
 }
 
@@ -148,4 +148,11 @@ resource "google_secret_manager_secret" "alert_from_email" {
 resource "google_secret_manager_secret_version" "alert_from_email" {
   secret      = google_secret_manager_secret.alert_from_email.id
   secret_data = var.alert_from_email
+}
+
+# Allow Cloud Run SA to write to logs bucket
+resource "google_storage_bucket_iam_member" "cloud_run_logs_writer" {
+  bucket = "banshee-tf-state-202407"
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
