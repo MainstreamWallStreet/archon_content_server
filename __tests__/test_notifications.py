@@ -8,11 +8,13 @@ from src.notifications import send_email, send_alert
 def test_send_email_success():
     fake_client = MagicMock()
     fake_client.send.return_value.status_code = 202
+    log = MagicMock()
     with patch("src.notifications.SendGridAPIClient", return_value=fake_client), patch(
         "src.notifications.get_setting", side_effect=lambda k: "x"
-    ):
+    ), patch("src.notifications.logger", log):
         send_email("user@example.com", "subj", "body")
         fake_client.send.assert_called()
+        log.info.assert_called_with("sent email to %s", "user@example.com")
 
 
 def test_send_email_failure():
@@ -31,10 +33,13 @@ def test_send_alert_all_recipients():
             return '["a@example.com","b@example.com"]'
         return "x"
 
-    with patch("src.notifications.send_email") as send_mock, patch(
+    fake_client = MagicMock()
+    fake_client.send.return_value.status_code = 202
+    log = MagicMock()
+    with patch("src.notifications.SendGridAPIClient", return_value=fake_client), patch(
         "src.notifications.get_setting", side_effect=_settings
-    ):
+    ), patch("src.notifications.logger", log):
         send_alert("subj", "body")
-        send_mock.assert_any_call("a@example.com", "subj", "body")
-        send_mock.assert_any_call("b@example.com", "subj", "body")
-        assert send_mock.call_count == 2
+        assert fake_client.send.call_count == 2
+        log.info.assert_any_call("sent email to %s", "a@example.com")
+        log.info.assert_any_call("sent email to %s", "b@example.com")

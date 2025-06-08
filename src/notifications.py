@@ -2,12 +2,37 @@
 
 from __future__ import annotations
 
+import json
+import logging
+import os
+
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
-import json
-
 from src.config import get_setting
+
+logger = logging.getLogger(__name__)
+
+
+class NotificationAgent:
+    """Minimal email notification service."""
+
+    def __init__(self, *, client: SendGridAPIClient, recipient: str) -> None:
+        self.client = client
+        self.recipient = recipient
+        self.from_email = os.getenv("ALERT_FROM_EMAIL", "banshee@example.com")
+
+    def send(self, subject: str, body: str) -> None:
+        message = Mail(
+            from_email=self.from_email,
+            to_emails=self.recipient,
+            subject=subject,
+            plain_text_content=body,
+        )
+        resp = self.client.send(message)
+        if resp.status_code >= 400:
+            raise RuntimeError(f"SendGrid error {resp.status_code}: {resp.body}")
+        logger.info("sent email to %s", self.recipient)
 
 
 def send_email(to_email: str, subject: str, message: str) -> None:
@@ -29,19 +54,9 @@ def send_email(to_email: str, subject: str, message: str) -> None:
     """
 
     api_key = get_setting("SENDGRID_API_KEY")
-    from_email = get_setting("ALERT_FROM_EMAIL")
-    mail = Mail(
-        from_email=from_email,
-        to_emails=to_email,
-        subject=subject,
-        plain_text_content=message,
-    )
-    try:
-        resp = SendGridAPIClient(api_key).send(mail)
-    except Exception as exc:  # pragma: no cover - network
-        raise RuntimeError(f"SendGrid error: {exc}") from exc
-    if resp.status_code >= 400:
-        raise RuntimeError(f"SendGrid error {resp.status_code}: {resp.body}")
+    client = SendGridAPIClient(api_key)
+    agent = NotificationAgent(client=client, recipient=to_email)
+    agent.send(subject, message)
 
 
 def send_alert(subject: str, message: str) -> None:
@@ -60,5 +75,7 @@ def send_alert(subject: str, message: str) -> None:
         recipients = json.loads(recipients_json)
     except json.JSONDecodeError as exc:  # pragma: no cover - misconfig
         raise RuntimeError(f"Invalid ALERT_RECIPIENTS: {exc}") from exc
+    api_key = get_setting("SENDGRID_API_KEY")
+    client = SendGridAPIClient(api_key)
     for addr in recipients:
-        send_email(addr, subject, message)
+        NotificationAgent(client=client, recipient=addr).send(subject, message)
