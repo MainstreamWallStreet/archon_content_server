@@ -1,0 +1,16 @@
+[tool.pytest.ini_options]
+# Pytest arguments kept minimal for compatibility
+addopts = ""
+pythonpath = [
+    "."
+]
+testpaths = ["__tests__"]
+python_files = ["test_*.py"]
+markers = [
+    "asyncio: mark test as async"
+]
+
+[tool.pytest_asyncio]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+

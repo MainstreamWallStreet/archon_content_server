@@ -1,0 +1,38 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+temp/
+logs/
+*.html
+*.json
+!requirements.txt
+!src/token.json
+!src/client_secret.json
+!.env
+
+# Test
+__tests__/
+.pytest_cache/
+.coverage 

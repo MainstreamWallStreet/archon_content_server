@@ -1,0 +1,35 @@
+# clouddeploy/services.yaml
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: filing-fetcher-api            # ⚠️ keep the existing service name
+spec:
+  template:
+    metadata:
+      annotations:
+        # ───────── runtime resources ─────────
+        run.googleapis.com/memory: "4Gi"              # RAM per instance
+        run.googleapis.com/cpu:    "2"                # vCPUs per instance
+        run.googleapis.com/container-concurrency: "2" # requests handled in parallel
+        # keep full CPU even while idle (optional, costs more)
+        run.googleapis.com/cpu-throttling: "false"
+    spec:
+      volumes:
+        # ───── Secret-backed volume (env file) ─────
+        - name: ffs-env
+          secret:
+            secretName: ffs-env            # created via `gcloud secrets create`
+            items:
+              - key: latest                # always mount newest version
+                path: .env                 # filename inside the volume
+      containers:
+        - name: api
+          image: api-image                 # 🔄 Cloud Deploy patches this tag
+          resources:
+            limits:
+              memory: 4Gi                  # duplicate limits are fine
+              cpu: "2"
+          volumeMounts:
+            - name: ffs-env
+              mountPath: /secrets          # `/secrets/.env` available at runtime
+              readOnly: true
