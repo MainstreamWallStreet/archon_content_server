@@ -1,0 +1,151 @@
+terraform {
+  required_providers {
+    google = {
+      source = "hashicorp/google"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "google" {
+  project = var.project
+  region  = var.region
+}
+
+data "google_project" "current" {}
+
+# Service accounts
+resource "google_service_account" "cloud_run_sa" {
+  account_id   = "cloud-run-banshee-sa"
+  display_name = "Banshee Cloud Run SA"
+}
+
+resource "google_service_account" "deploy_sa" {
+  account_id   = "deploy-banshee-sa"
+  display_name = "Banshee Deploy SA"
+}
+
+# Artifact Registry
+resource "google_artifact_registry_repository" "docker_repo" {
+  location      = var.region
+  repository_id = "banshee"
+  format        = "DOCKER"
+}
+
+resource "google_artifact_registry_repository_iam_member" "cloudbuild_writer" {
+  repository = google_artifact_registry_repository.docker_repo.id
+  location   = var.region
+  role       = "roles/artifactregistry.writer"
+  member     = "serviceAccount:${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
+}
+
+# Workload Identity Pool and provider
+resource "google_iam_workload_identity_pool" "github_pool" {
+  workload_identity_pool_id = "banshee-github-pool"
+  display_name              = "Banshee GitHub Actions Pool"
+}
+
+resource "google_iam_workload_identity_pool_provider" "github_provider_v3" {
+  workload_identity_pool_id          = google_iam_workload_identity_pool.github_pool.workload_identity_pool_id
+  workload_identity_pool_provider_id = "banshee-github-provider"
+  display_name                       = "Banshee GitHub Actions Provider"
+
+  attribute_mapping = {
+    "google.subject"       = "assertion.sub"
+    "attribute.repository" = "assertion.repository"
+  }
+
+  oidc { issuer_uri = "https://token.actions.githubusercontent.com" }
+
+  attribute_condition = "attribute.repository == \"${var.github_owner}/${var.github_repo}\""
+}
+
+resource "google_service_account_iam_member" "github_wif" {
+  service_account_id = google_service_account.cloud_run_sa.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/attribute.repository/${var.github_owner}/${var.github_repo}"
+}
+
+# Cloud Deploy target and pipeline
+resource "google_clouddeploy_target" "dev" {
+  name     = "dev"
+  location = var.region
+
+  run {
+    location = "projects/${var.project}/locations/${var.region}"
+  }
+
+  execution_configs {
+    usages         = ["RENDER", "DEPLOY"]
+    service_account = google_service_account.deploy_sa.email
+  }
+}
+
+resource "google_clouddeploy_delivery_pipeline" "banshee" {
+  name     = "banshee-pipeline"
+  location = var.region
+
+  serial_pipeline {
+    stages {
+      target_id = google_clouddeploy_target.dev.name
+    }
+  }
+}
+
+# IAM for deploy service account
+resource "google_project_iam_member" "deploy_run_admin" {
+  project = var.project
+  role    = "roles/run.admin"
+  member  = "serviceAccount:${google_service_account.deploy_sa.email}"
+}
+
+resource "google_project_iam_member" "deploy_sa_user" {
+  project = var.project
+  role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:${google_service_account.deploy_sa.email}"
+}
+
+resource "google_project_iam_member" "cloudbuild_deployer" {
+  project = var.project
+  role    = "roles/clouddeploy.releaser"
+  member  = "serviceAccount:${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
+}
+
+# IAM for cloud-run-banshee-sa
+resource "google_project_iam_member" "cloud_run_builder" {
+  project = var.project
+  role    = "roles/cloudbuild.builds.builder"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+resource "google_project_iam_member" "cloud_run_admin" {
+  project = var.project
+  role    = "roles/run.admin"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+# Add Service Account Token Creator role
+resource "google_project_iam_member" "cloud_run_token_creator" {
+  project = var.project
+  role    = "roles/iam.serviceAccountTokenCreator"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+# Add Service Account User role
+resource "google_project_iam_member" "cloud_run_sa_user" {
+  project = var.project
+  role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+resource "google_secret_manager_secret" "alert_from_email" {
+  secret_id = "alert-from-email"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "alert_from_email" {
+  secret      = google_secret_manager_secret.alert_from_email.id
+  secret_data = var.alert_from_email
+}
