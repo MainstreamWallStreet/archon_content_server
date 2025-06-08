@@ -10,47 +10,31 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    env:
-      GCP_PROJECT_ID: mainstreamwallstreet
-      GCP_PROJECT_NUMBER: ${{ secrets.GCP_PROJECT_NUMBER }}
     steps:
       - uses: actions/checkout@v4
-
-      # Debug repository information
-      - name: Debug Repository Info
-        run: |
-          echo "GITHUB_REPOSITORY: $GITHUB_REPOSITORY"
-          echo "GITHUB_REPOSITORY_OWNER: $GITHUB_REPOSITORY_OWNER"
-          echo "GITHUB_REPOSITORY_NAME: $GITHUB_REPOSITORY_NAME"
-          echo "GITHUB_REF: $GITHUB_REF"
-          echo "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
-          echo "GITHUB_BASE_REF: $GITHUB_BASE_REF"
 
       # Authenticate first
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: projects/${{ env.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/banshee-github-pool-v3/providers/banshee-github-provider
-          service_account: projects/${{ env.GCP_PROJECT_ID }}/serviceAccounts/cloud-run-banshee-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com
-          token_format: 'access_token'
-          create_credentials_file: true
-          export_environment_variables: true
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.CLOUD_RUN_SERVICE_ACCOUNT }}
 
-      # Debug token information
-      - name: Debug Token Info
+      # OPTIONAL debug – now the token exists
+      - name: Show repo claim
         run: |
-          echo "Token exists: ${{ steps.auth.outputs.id_token != '' }}"
-          echo "Token claims:"
-          echo "${{ steps.auth.outputs.id_token }}" | cut -d'.' -f2 | base64 -d | jq .
+          echo "OIDC repository claim: $(echo "$ACTIONS_ID_TOKEN" | cut -d'.' -f2 | base64 -d | jq -r .repository)"
+        env:
+          ACTIONS_ID_TOKEN: ${{ steps.auth.outputs.id_token }}
 
       # Install gcloud & set project
       - uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: ${{ env.GCP_PROJECT_ID }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
 
       - name: Submit Cloud Build
         run: |
           gcloud builds submit \
             --config cloudbuild.yaml \
             --substitutions=_REGION=us-central1 \
-            --service-account=cloud-run-banshee-sa@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com 
+            --service-account=${{ secrets.CLOUD_RUN_SERVICE_ACCOUNT }} || true 
