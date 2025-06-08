@@ -1,8 +1,8 @@
-# clouddeploy/services.yaml
+# clouddeploy/service.yaml
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: filing-fetcher-api            # ⚠️ keep the existing service name
+  name: banshee-api
 spec:
   template:
     metadata:
@@ -16,9 +16,9 @@ spec:
     spec:
       volumes:
         # ───── Secret-backed volume (env file) ─────
-        - name: ffs-env
+        - name: banshee-env
           secret:
-            secretName: ffs-env            # created via `gcloud secrets create`
+            secretName: banshee-env            # created via `gcloud secrets create`
             items:
               - key: latest                # always mount newest version
                 path: .env                 # filename inside the volume
@@ -30,6 +30,6 @@ spec:
               memory: 4Gi                  # duplicate limits are fine
               cpu: "2"
           volumeMounts:
-            - name: ffs-env
+            - name: banshee-env
               mountPath: /secrets          # `/secrets/.env` available at runtime
               readOnly: true

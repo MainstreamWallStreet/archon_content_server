@@ -1,15 +1,15 @@
 apiVersion: skaffold/v3
 kind: Config
 metadata:
-  name: filing-fetcher
+  name: banshee
 
-# The rendered Cloud Run service manifest that Cloud Deploy stitches in
+# The rendered Cloud Run service manifest that Cloud Deploy stitches in
 manifests:
   rawYaml:
     - clouddeploy/service.yaml
 
-# Tell Skaffold “I’m deploying to Cloud Run, not GKE”
+# Tell Skaffold "I'm deploying to Cloud Run, not GKE"
 deploy:
   cloudrun:
-    # projectId can be omitted; Cloud Deploy injects it at runtime
+    # projectId can be omitted; Cloud Deploy injects it at runtime
     region: us-central1
