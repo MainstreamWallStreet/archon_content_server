@@ -13,6 +13,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Debug repository information
+      - name: Debug Repository Info
+        run: |
+          echo "GITHUB_REPOSITORY: $GITHUB_REPOSITORY"
+          echo "GITHUB_REPOSITORY_OWNER: $GITHUB_REPOSITORY_OWNER"
+          echo "GITHUB_REPOSITORY_NAME: $GITHUB_REPOSITORY_NAME"
+
       # Authenticate first
       - id: auth
         uses: google-github-actions/auth@v2
