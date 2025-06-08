@@ -42,9 +42,12 @@ os.environ.setdefault("OPENAI_API_KEY", "dummy")
 os.environ.setdefault("API_NINJAS_KEY", "dummy")
 os.environ.setdefault("GOOGLE_DRIVE_ROOT_FOLDER_ID", "dummy")
 os.environ.setdefault("JOB_QUEUE_BUCKET", "test-bucket")
+os.environ["BANSHEE_DATA_BUCKET"] = "test-bucket"
+os.environ["BANSHEE_API_KEY"] = "test"
 os.environ.setdefault("STORAGE_EMULATOR_HOST", "http://localhost:4443")
 os.environ.setdefault("QUARTERLY_FILING_DATA_VERSION", "1")
 os.environ.setdefault("TRANSCRIPT_DATA_VERSION", "1")
+os.environ.pop("GOOGLE_CLOUD_PROJECT", None)
 
 # Mock GCS client at module level
 mock_client = MagicMock()

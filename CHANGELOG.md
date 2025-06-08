@@ -3,6 +3,9 @@
 
 ## Unreleased
 ### Added
+- SendGrid email helper for notifications.
+- `ALERT_RECIPIENTS` env var supports multiple alert emails.
+- Script `scripts/watchlist_demo.py` demonstrates adding and removing a ticker.
 - `/updates` endpoint consolidating job and task status.
 - Fine-grained progress messages now tracked per job and exposed via `/updates`.
 - Jobs now store a `start_time` when queued.
