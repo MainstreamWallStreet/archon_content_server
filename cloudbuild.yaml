@@ -38,4 +38,7 @@ steps:
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/banshee/banshee:$BUILD_ID'
 
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 timeout: '900s'
