@@ -18,8 +18,8 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: >-
-            projects/455624753981/locations/global/workloadIdentityPools/banshee-github-pool/providers/banshee-github-provider
-          service_account: cloud-run-raven-sa@mainstreamwallstreet.iam.gserviceaccount.com
+            projects/mainstreamwallstreet/locations/global/workloadIdentityPools/banshee-github-pool/providers/banshee-github-provider
+          service_account: cloud-run-banshee-sa@mainstreamwallstreet.iam.gserviceaccount.com
 
       # OPTIONAL debug – now the token exists
       - name: Show repo claim
