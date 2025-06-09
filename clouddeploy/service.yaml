@@ -13,6 +13,8 @@ spec:
         run.googleapis.com/container-concurrency: "2" # requests handled in parallel
         # keep full CPU even while idle (optional, costs more)
         run.googleapis.com/cpu-throttling: "false"
+        # ───────── service account ─────────
+        run.googleapis.com/service-account: "banshee-cloud-run@${PROJECT_ID}.iam.gserviceaccount.com"
     spec:
       volumes:
         # ───── Secret-backed volume (env file) ─────
