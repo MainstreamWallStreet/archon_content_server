@@ -138,6 +138,13 @@ resource "google_project_iam_member" "cloud_run_sa_user" {
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
 
+# Allow Cloud Run service account to invoke services
+resource "google_project_iam_member" "cloud_run_invoker" {
+  project = var.project
+  role    = "roles/run.invoker"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
 resource "google_secret_manager_secret" "alert_from_email" {
   secret_id = "alert-from-email"
   replication {
@@ -154,5 +161,18 @@ resource "google_secret_manager_secret_version" "alert_from_email" {
 resource "google_storage_bucket_iam_member" "cloud_run_logs_writer" {
   bucket = "banshee-tf-state-202407"
   role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+# Storage bucket for Banshee data
+resource "google_storage_bucket" "banshee_data" {
+  name     = "banshee-data"
+  location = var.region
+  uniform_bucket_level_access = true
+}
+
+resource "google_storage_bucket_iam_member" "banshee_data_writer" {
+  bucket = google_storage_bucket.banshee_data.name
+  role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }

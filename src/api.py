@@ -34,8 +34,12 @@ from pydantic import BaseModel, field_validator
 from src.config import get_setting  # centralised secret helper
 from src.edgar_cli import process_quarter
 from src.transcript_helper import save_transcript_to_drive
-from src.gdrive.gdrive_helper import _safe_request
 from src import progress
+from src.edgar_cli import (
+    get_or_create_company_folder,
+    get_or_create_year_folder,
+    get_or_create_quarter_folder,
+)
 from src.gcs_job_queue import GcsJobQueue
 import logging
 import traceback

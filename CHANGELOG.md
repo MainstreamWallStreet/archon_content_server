@@ -56,4 +56,7 @@
   - Jobs now fail if filing processing raises an exception.
   - A background status printer now logs each job's phase every 10s, showing transcript and filing completion links.
   - Verbose paragraph-level progress logs are suppressed.
+  - Terraform now provisions the `banshee-data` bucket and grants the Cloud Run
+    service account `roles/run.invoker` and storage access.
+  - Cloud Deploy release names now patch the correct container image.
 
