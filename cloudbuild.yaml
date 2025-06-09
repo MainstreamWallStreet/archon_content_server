@@ -1,7 +1,7 @@
 substitutions:
   _REGION: us-central1
   _PIPELINE: banshee-pipeline
-  _SERVICE: banshee-api
+  _SERVICE: api-image
 
 steps:
   # 1. Build image

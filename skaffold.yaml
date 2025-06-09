@@ -1,4 +1,4 @@
-apiVersion: skaffold/v3
+apiVersion: skaffold/v4beta7
 kind: Config
 metadata:
   name: banshee
@@ -11,5 +11,4 @@ manifests:
 # Tell Skaffold "I'm deploying to Cloud Run, not GKE"
 deploy:
   cloudrun:
-    # projectId can be omitted; Cloud Deploy injects it at runtime
     region: us-central1
