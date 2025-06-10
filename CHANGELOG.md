@@ -3,6 +3,10 @@
 
 ## Unreleased
 ### Added
+- **Enhanced Email Alert Logging**: Comprehensive logging now shows exactly which email addresses are receiving alerts, with detailed success/failure status for each recipient
+- **Improved Alert Recipients Handling**: Better error handling and validation for the `ALERT_RECIPIENTS` array, ensuring all configured emails receive alerts
+- **Secret Manager Integration**: Added `alert-recipients` secret in Terraform to properly handle the array of email addresses
+- **Robust Error Recovery**: Alert system now continues sending to remaining recipients even if some emails fail
 - SendGrid email helper for notifications.
 - `ALERT_RECIPIENTS` env var supports multiple alert emails.
 - Script `scripts/watchlist_demo.py` demonstrates adding and removing a ticker.
@@ -18,6 +22,7 @@
 - Job queue now persists to Google Cloud Storage with per-job origin tracking.
 - Quarterly data version tracking with `QUARTERLY_FILING_DATA_VERSION` and
   `TRANSCRIPT_DATA_VERSION` now added to docs as `data_version = n`.
+- Simple password-protected web UI for managing the watchlist.
 - Google Drive storage now creates a `Q<quarter>` folder within each year
   folder, and document titles follow `TICKER YYYY QN - <doctype>`.
 - **GCS-backed job queue:**
@@ -56,4 +61,7 @@
   - Jobs now fail if filing processing raises an exception.
   - A background status printer now logs each job's phase every 10s, showing transcript and filing completion links.
   - Verbose paragraph-level progress logs are suppressed.
+  - Terraform now provisions the `banshee-data` bucket and grants the Cloud Run
+    service account `roles/run.invoker` and storage access.
+  - Cloud Deploy release names now patch the correct container image.
 

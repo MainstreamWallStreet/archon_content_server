@@ -2,7 +2,7 @@
 """FastAPI application for Banshee – Automated Earnings Call Tracking System.
 
 Banshee continuously monitors a global watchlist of ticker symbols, automatically
-fetching upcoming earnings calls from API Ninjas, scheduling email alerts via Twilio,
+fetching upcoming earnings calls from API Ninjas, scheduling email alerts via SendGrid,
 and orchestrating transcript processing through the Raven API.
 
 The system operates through scheduled Cloud Tasks and maintains state in Google
@@ -34,8 +34,12 @@ from pydantic import BaseModel, field_validator
 from src.config import get_setting  # centralised secret helper
 from src.edgar_cli import process_quarter
 from src.transcript_helper import save_transcript_to_drive
-from src.gdrive.gdrive_helper import _safe_request
 from src import progress
+from src.edgar_cli import (
+    get_or_create_company_folder,
+    get_or_create_year_folder,
+    get_or_create_quarter_folder,
+)
 from src.gcs_job_queue import GcsJobQueue
 import logging
 import traceback
@@ -121,11 +125,11 @@ Banshee tracks earnings calls across your entire portfolio, ensuring you never m
 - Persists call schedules to `gs://banshee-data/earnings_queue/`
 - Automatically schedules email reminder workflows
 
-### 2️⃣ **Smart email Alerts**
+### 2️⃣ **Smart Email Alerts**
 *Triggered: Immediately after watchlist sync*
 - **-7 Days @ 09:00 EST**: "AAPL earnings call in 1 week (Jul 30)"
 - **Day-of @ 06:00 EST**: "AAPL earnings call today at 2:00 PM"
-- Uses Cloud Tasks → Twilio for reliable delivery
+- Uses Cloud Tasks → SendGrid for reliable delivery
 
 ### 3️⃣ **Transcript Processing**
 *Triggered: Every 30 minutes on call dates*
@@ -190,9 +194,9 @@ gs://banshee-data/
 **External Services:**
 - **API Ninjas**: Earnings calendar data (`/v1/earningscalendar`)
 - **Raven API**: Transcript processing (shared API key in Secret Manager)
-- **Twilio**: email delivery (account SID, auth token, from number)
+- **SendGrid**: Email delivery (API key, from email, recipient list)
 
-## 📱 email Alert Examples
+## 📱 Email Alert Examples
 
 ```
 "📊 AAPL earnings call in 7 days (Jul 30 @ 2:00 PM EST)"

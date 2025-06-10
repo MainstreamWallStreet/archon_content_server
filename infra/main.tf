@@ -138,6 +138,20 @@ resource "google_project_iam_member" "cloud_run_sa_user" {
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
 
+# Allow Cloud Run service account to invoke services
+resource "google_project_iam_member" "cloud_run_invoker" {
+  project = var.project
+  role    = "roles/run.invoker"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+# Allow Cloud Run SA to access Secret Manager secrets
+resource "google_project_iam_member" "cloud_run_secret_accessor" {
+  project = var.project
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
 resource "google_secret_manager_secret" "alert_from_email" {
   secret_id = "alert-from-email"
   replication {
@@ -150,9 +164,48 @@ resource "google_secret_manager_secret_version" "alert_from_email" {
   secret_data = var.alert_from_email
 }
 
+# Web interface password secret
+resource "google_secret_manager_secret" "web_password" {
+  secret_id = "banshee-web-password"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "web_password" {
+  secret      = google_secret_manager_secret.web_password.id
+  secret_data = var.web_password
+}
+
+# Alert recipients secret
+resource "google_secret_manager_secret" "alert_recipients" {
+  secret_id = "alert-recipients"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "alert_recipients" {
+  secret      = google_secret_manager_secret.alert_recipients.id
+  secret_data = jsonencode(var.alert_recipients)
+}
+
 # Allow Cloud Run SA to write to logs bucket
 resource "google_storage_bucket_iam_member" "cloud_run_logs_writer" {
   bucket = "banshee-tf-state-202407"
   role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+# Storage bucket for Banshee data
+resource "google_storage_bucket" "banshee_data" {
+  name     = "banshee-data"
+  location = var.region
+  uniform_bucket_level_access = true
+}
+
+resource "google_storage_bucket_iam_member" "banshee_data_writer" {
+  bucket = google_storage_bucket.banshee_data.name
+  role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
