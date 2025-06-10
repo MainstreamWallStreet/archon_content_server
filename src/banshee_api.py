@@ -680,6 +680,7 @@ WATCHLIST_HTML = """
       padding: 0.5rem 1rem;
       font-size: 0.875rem;
       box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+      border-radius: 8px;
     }
     .delete-btn:hover {
       box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
@@ -694,14 +695,44 @@ WATCHLIST_HTML = """
       backdrop-filter: blur(15px);
       border: 1px solid rgba(229, 231, 235, 0.8);
       border-radius: 16px;
-      padding: 1.25rem;
       transition: all 0.2s ease;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      overflow: hidden;
+      position: relative;
     }
     .card:hover {
       transform: translateY(-2px);
       box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
       border-color: rgba(102, 126, 234, 0.3);
+    }
+    .swipe-container {
+      display: flex;
+      width: 100%;
+      transition: transform 0.3s ease;
+      position: relative;
+    }
+    .card-content {
+      flex: 1;
+      padding: 1.25rem;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(15px);
+      min-width: 100%;
+    }
+    .delete-area {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      min-width: 80px;
+      color: white;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .delete-area:hover {
+      background: linear-gradient(135deg, #dc2626, #b91c1c);
+    }
+    .delete-area i {
+      font-size: 1.25rem;
     }
     .ticker-item {
       display: flex;
@@ -942,46 +973,88 @@ WATCHLIST_HTML = """
       font-weight: 700;
     }
     
-    /* Mobile Responsive Design */
+    /* Desktop delete button - hidden on mobile */
+    .desktop-delete {
+      display: flex;
+    }
+    
+    /* Mobile swipe indicator */
+    .swipe-hint {
+      position: absolute;
+      right: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #9ca3af;
+      font-size: 0.75rem;
+      opacity: 0.7;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    
+    /* Hide swipe hint when swiped */
+    .swiped .swipe-hint {
+      opacity: 0;
+    }
+    
+    /* Mobile-specific styles */
     @media (max-width: 768px) {
-      .container {
-        margin: 0.5rem;
-        padding: 1.5rem;
-        min-height: calc(100vh - 1rem);
-        border-radius: 20px;
+      .desktop-delete {
+        display: none;
       }
-      h1 {
-        font-size: 1.75rem;
-      }
-      .form-row {
-        flex-direction: column;
-      }
-      .nav-tab {
-        font-size: 0.875rem;
-        padding: 0.75rem 0.5rem;
-      }
+      
       .card {
+        padding: 0;
+        border-radius: 12px;
+      }
+      
+      .card-content {
+        padding: 1rem;
+        border-radius: 12px;
+      }
+      
+      .ticker-item {
+        flex-direction: row;
+        align-items: center;
+        gap: 0;
+        position: relative;
+      }
+      
+      .ticker-info {
+        flex: 1;
+      }
+      
+      .delete-area {
+        min-width: 100px;
         padding: 1rem;
       }
-      .ticker-item {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 1rem;
+      
+      /* Touch feedback */
+      .card-content:active {
+        background: rgba(248, 250, 252, 0.95);
       }
-      .ticker-info {
-        justify-content: center;
+      
+      /* Swipe animation classes */
+      .swipe-left {
+        transform: translateX(-100px);
       }
-      .modal-content {
-        margin: 10% auto;
-        width: 95%;
-        padding: 1.5rem;
+      
+      .swipe-reset {
+        transform: translateX(0);
       }
-      .modal-countdown {
-        font-size: 2rem;
-        padding: 1.5rem;
+      
+      /* Delete confirmation state */
+      .delete-ready {
+        transform: translateX(-120px);
       }
-      .earnings-info {
-        grid-template-columns: 1fr;
+      
+      .delete-ready .delete-area {
+        background: linear-gradient(135deg, #dc2626, #b91c1c);
+        animation: pulse-delete 0.6s ease-in-out;
+      }
+      
+      @keyframes pulse-delete {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
       }
     }
     
@@ -1205,21 +1278,34 @@ WATCHLIST_HTML = """
             const li = document.createElement('li');
             li.className = 'card';
             li.innerHTML = `
-              <div class="ticker-item">
-                <div class="ticker-info">
-                  <div class="ticker-icon">${ticker.substring(0, 2).toUpperCase()}</div>
-                  <div>
-                    <div class="ticker-name">${ticker.toUpperCase()}</div>
-                    <small style="color: #6b7280;">Stock Symbol</small>
+              <div class="swipe-container" data-ticker="${ticker}">
+                <div class="card-content">
+                  <div class="ticker-item">
+                    <div class="ticker-info">
+                      <div class="ticker-icon">${ticker.substring(0, 2).toUpperCase()}</div>
+                      <div>
+                        <div class="ticker-name">${ticker.toUpperCase()}</div>
+                        <small style="color: #6b7280;">Stock Symbol</small>
+                      </div>
+                    </div>
+                    <button class="delete-btn desktop-delete" onclick="deleteTicker('${ticker}')">
+                      <i class="fas fa-trash"></i>
+                      <span>Remove</span>
+                    </button>
+                    <div class="swipe-hint">
+                      <i class="fas fa-chevron-left"></i>
+                    </div>
                   </div>
                 </div>
-                <button class="delete-btn" onclick="deleteTicker('${ticker}')">
+                <div class="delete-area" onclick="deleteTicker('${ticker}')">
                   <i class="fas fa-trash"></i>
-                  <span>Remove</span>
-                </button>
+                </div>
               </div>
             `;
             listEl.appendChild(li);
+            
+            // Add touch event listeners for swipe functionality
+            setupSwipeGestures(li.querySelector('.swipe-container'));
           });
         }
         
@@ -1233,6 +1319,124 @@ WATCHLIST_HTML = """
         listEl.style.display = 'block';
         updateStats(0);
       }
+    }
+    
+    function setupSwipeGestures(container) {
+      let startX = 0;
+      let currentX = 0;
+      let startTime = 0;
+      let isMoving = false;
+      let isSwiped = false;
+      
+      // Touch start
+      container.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        currentX = startX;
+        startTime = Date.now();
+        isMoving = true;
+        container.style.transition = 'none';
+      }, { passive: true });
+      
+      // Touch move
+      container.addEventListener('touchmove', (e) => {
+        if (!isMoving) return;
+        
+        currentX = e.touches[0].clientX;
+        const deltaX = currentX - startX;
+        
+        // Only allow left swipe (negative deltaX)
+        if (deltaX < 0) {
+          const moveAmount = Math.min(Math.abs(deltaX), 120);
+          container.style.transform = `translateX(-${moveAmount}px)`;
+          
+          // Add swiped class when moved significantly
+          if (moveAmount > 20) {
+            container.parentElement.classList.add('swiped');
+          }
+        } else {
+          // Reset if swiping right
+          container.style.transform = 'translateX(0)';
+          container.parentElement.classList.remove('swiped');
+        }
+      }, { passive: true });
+      
+      // Touch end
+      container.addEventListener('touchend', (e) => {
+        if (!isMoving) return;
+        
+        const deltaX = currentX - startX;
+        const deltaTime = Date.now() - startTime;
+        const velocity = Math.abs(deltaX) / deltaTime;
+        
+        container.style.transition = 'transform 0.3s ease';
+        
+        // Determine if swipe should complete
+        const shouldComplete = Math.abs(deltaX) > 60 || velocity > 0.3;
+        
+        if (deltaX < 0 && shouldComplete) {
+          // Complete the swipe
+          container.style.transform = 'translateX(-100px)';
+          container.classList.add('swipe-left');
+          isSwiped = true;
+          
+          // Add delete ready state for stronger visual feedback
+          setTimeout(() => {
+            if (isSwiped) {
+              container.classList.add('delete-ready');
+            }
+          }, 100);
+        } else {
+          // Reset the swipe
+          container.style.transform = 'translateX(0)';
+          container.classList.remove('swipe-left', 'delete-ready');
+          container.parentElement.classList.remove('swiped');
+          isSwiped = false;
+        }
+        
+        isMoving = false;
+      });
+      
+      // Click on card content when swiped should reset
+      container.querySelector('.card-content').addEventListener('click', (e) => {
+        if (isSwiped) {
+          e.preventDefault();
+          e.stopPropagation();
+          resetSwipe(container);
+        }
+      });
+      
+      // Mouse events for desktop
+      container.addEventListener('mouseenter', () => {
+        if (window.innerWidth > 768) {
+          // Desktop hover behavior
+          container.querySelector('.swipe-hint').style.opacity = '0';
+        }
+      });
+      
+      container.addEventListener('mouseleave', () => {
+        if (window.innerWidth > 768) {
+          container.querySelector('.swipe-hint').style.opacity = '0.7';
+        }
+      });
+      
+      function resetSwipe(container) {
+        container.style.transition = 'transform 0.3s ease';
+        container.style.transform = 'translateX(0)';
+        container.classList.remove('swipe-left', 'delete-ready');
+        container.parentElement.classList.remove('swiped');
+        isSwiped = false;
+      }
+      
+      // Auto-reset swipe after 3 seconds
+      let resetTimeout;
+      container.addEventListener('transitionend', () => {
+        if (isSwiped) {
+          clearTimeout(resetTimeout);
+          resetTimeout = setTimeout(() => {
+            resetSwipe(container);
+          }, 3000);
+        }
+      });
     }
     
     async function loadUpcomingEarnings() {
