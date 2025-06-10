@@ -21,7 +21,7 @@ spec:
       timeoutSeconds: 300
       containers:
         - name: api
-          image: api-image                 # 🔄 Cloud Deploy patches this tag
+          image: api                   # 🔄 Cloud Deploy patches this tag
           resources:
             limits:
               memory: 4Gi                  # duplicate limits are fine
