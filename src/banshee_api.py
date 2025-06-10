@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import aiohttp
 from typing import List
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Security, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -51,6 +52,25 @@ class AlertPayload(BaseModel):
     message: str
 
 
+class EarningsCall(BaseModel):
+    """Data model for an earnings call event."""
+    ticker: str
+    call_date: str  # YYYY-MM-DD format
+    call_time: str  # ISO 8601 datetime string
+    status: str
+    actual_eps: float | None = None
+    estimated_eps: float | None = None
+    actual_revenue: int | None = None
+    estimated_revenue: int | None = None
+
+
+class UpcomingCallsResponse(BaseModel):
+    """Response model for upcoming earnings calls."""
+    calls: List[EarningsCall]
+    total_count: int
+    next_call: EarningsCall | None = None
+
+
 @app.get("/")
 def root():
     """Redirect root to the web interface."""
@@ -62,7 +82,7 @@ def web_login(password: str = Form(...)):
     """Simple password-based login for web interface."""
     expected_password = get_setting("BANSHEE_WEB_PASSWORD")
     if not secrets.compare_digest(password, expected_password):
-        return HTMLResponse(content=LOGIN_HTML.replace("{error}", "Invalid password. Please try again."), status_code=401)
+        return HTMLResponse(content=LOGIN_HTML.replace("{error}", "<div class='error'>Invalid password. Please try again.</div>"), status_code=401)
     
     # Create a simple session token
     import uuid
@@ -94,6 +114,78 @@ def delete_watchlist(ticker: str, _: str = Depends(validate_key)) -> dict[str, s
     return {"message": "removed"}
 
 
+@app.get("/earnings/upcoming")
+async def get_upcoming_earnings(_: str = Depends(validate_key)) -> UpcomingCallsResponse:
+    """Get upcoming earnings calls for all watchlist tickers."""
+    calls = []
+    tickers = store.list_tickers()
+    
+    for ticker in tickers:
+        try:
+            # Fetch data with show_upcoming=true to get future earnings
+            data = await _fetch_api_ninjas_upcoming(ticker)
+            for item in data:
+                if "earnings_date" in item:
+                    call = EarningsCall(
+                        ticker=ticker,
+                        call_date=item["earnings_date"][:10],
+                        call_time=item["earnings_date"],
+                        status="scheduled",
+                        actual_eps=item.get("actual_eps"),
+                        estimated_eps=item.get("estimated_eps"),
+                        actual_revenue=item.get("actual_revenue"),
+                        estimated_revenue=item.get("estimated_revenue")
+                    )
+                    calls.append(call)
+        except Exception as e:
+            # Skip failed tickers but log the error
+            print(f"Error fetching earnings for {ticker}: {e}")
+            continue
+    
+    # Sort by call time
+    calls.sort(key=lambda x: x.call_time)
+    
+    # Filter to only future calls
+    now = datetime.now(timezone.utc)
+    future_calls = [
+        call for call in calls 
+        if datetime.fromisoformat(call.call_time.replace('Z', '+00:00')) > now
+    ]
+    
+    next_call = future_calls[0] if future_calls else None
+    
+    return UpcomingCallsResponse(
+        calls=future_calls,
+        total_count=len(future_calls),
+        next_call=next_call
+    )
+
+
+@app.get("/earnings/{ticker}")
+async def get_ticker_earnings(ticker: str, _: str = Depends(validate_key)) -> List[EarningsCall]:
+    """Get earnings calls for a specific ticker."""
+    data = await _fetch_api_ninjas_upcoming(ticker)
+    calls = []
+    
+    for item in data:
+        if "earnings_date" in item:
+            call = EarningsCall(
+                ticker=ticker,
+                call_date=item["earnings_date"][:10],
+                call_time=item["earnings_date"],
+                status="scheduled",
+                actual_eps=item.get("actual_eps"),
+                estimated_eps=item.get("estimated_eps"),
+                actual_revenue=item.get("actual_revenue"),
+                estimated_revenue=item.get("estimated_revenue")
+            )
+            calls.append(call)
+    
+    # Sort by call time
+    calls.sort(key=lambda x: x.call_time)
+    return calls
+
+
 @app.post("/send-global-alert")
 def send_global_alert(
     payload: AlertPayload, _: str = Depends(validate_key)
@@ -106,6 +198,17 @@ def send_global_alert(
 
 async def _fetch_api_ninjas(ticker: str) -> list[dict]:
     url = f"https://api.api-ninjas.com/v1/earningscalendar?ticker={ticker}"
+    headers = {"X-Api-Key": get_setting("API_NINJAS_KEY")}
+    async with aiohttp.ClientSession() as sess:
+        async with sess.get(url, headers=headers) as resp:
+            if resp.status != 200:
+                raise RuntimeError(f"API Ninjas error {resp.status}")
+            return await resp.json()
+
+
+async def _fetch_api_ninjas_upcoming(ticker: str) -> list[dict]:
+    """Fetch upcoming earnings calls from API Ninjas."""
+    url = f"https://api.api-ninjas.com/v1/earningscalendar?ticker={ticker}&show_upcoming=true"
     headers = {"X-Api-Key": get_setting("API_NINJAS_KEY")}
     async with aiohttp.ClientSession() as sess:
         async with sess.get(url, headers=headers) as resp:
@@ -262,9 +365,40 @@ WATCHLIST_HTML = """
       border-radius: 10px;
       padding: 30px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-      max-width: 800px;
+      max-width: 1200px;
       margin: 20px auto;
       min-height: calc(100vh - 40px);
+    }
+    .nav-tabs {
+      display: flex;
+      border-bottom: 2px solid #e0e6ed;
+      margin-bottom: 30px;
+    }
+    .nav-tab {
+      flex: 1;
+      text-align: center;
+      padding: 15px;
+      background: none;
+      border: none;
+      font-size: 16px;
+      font-weight: 500;
+      color: #7f8c8d;
+      cursor: pointer;
+      transition: all 0.3s;
+      border-bottom: 3px solid transparent;
+    }
+    .nav-tab.active {
+      color: #667eea;
+      border-bottom-color: #667eea;
+    }
+    .nav-tab:hover {
+      background: rgba(102, 126, 234, 0.1);
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
     }
     h1 {
       color: #2c3e50;
@@ -326,10 +460,10 @@ WATCHLIST_HTML = """
     .delete-btn:hover {
       background: #c0392b;
     }
-    .watchlist {
+    .watchlist, .earnings-list {
       list-style: none;
     }
-    .ticker-item {
+    .ticker-item, .earnings-item {
       background: white;
       margin-bottom: 10px;
       padding: 15px;
@@ -339,14 +473,60 @@ WATCHLIST_HTML = """
       justify-content: space-between;
       align-items: center;
       transition: box-shadow 0.3s;
+      cursor: pointer;
     }
-    .ticker-item:hover {
+    .ticker-item:hover, .earnings-item:hover {
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .earnings-item {
+      cursor: default;
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .earnings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    .earnings-details {
+      display: none;
+      padding-top: 10px;
+      border-top: 1px solid #e0e6ed;
+    }
+    .earnings-details.show {
+      display: block;
     }
     .ticker-name {
       font-weight: 600;
       color: #2c3e50;
       font-size: 1.1em;
+    }
+    .earnings-time {
+      color: #7f8c8d;
+      font-size: 0.9em;
+    }
+    .countdown {
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 1.1em;
+      font-weight: bold;
+      color: #e74c3c;
+    }
+    .countdown.urgent {
+      color: #e74c3c;
+      animation: pulse 1s infinite;
+    }
+    .countdown.soon {
+      color: #f39c12;
+    }
+    .countdown.normal {
+      color: #27ae60;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.7; }
+      100% { opacity: 1; }
     }
     .empty-state {
       text-align: center;
@@ -384,6 +564,73 @@ WATCHLIST_HTML = """
       color: #667eea;
       font-weight: 500;
     }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+    }
+    .modal-content {
+      background-color: white;
+      margin: 5% auto;
+      padding: 30px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 600px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #e0e6ed;
+    }
+    .close {
+      color: #aaa;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .close:hover {
+      color: #667eea;
+    }
+    .modal-countdown {
+      text-align: center;
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 2em;
+      margin: 20px 0;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border: 2px solid #e0e6ed;
+    }
+    .earnings-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-top: 20px;
+    }
+    .info-item {
+      padding: 10px;
+      background: #f8f9fa;
+      border-radius: 6px;
+    }
+    .info-label {
+      font-weight: 600;
+      color: #2c3e50;
+      font-size: 0.9em;
+    }
+    .info-value {
+      color: #7f8c8d;
+      font-size: 1.1em;
+    }
     @media (max-width: 600px) {
       .container {
         margin: 10px;
@@ -396,6 +643,13 @@ WATCHLIST_HTML = """
       h1 {
         font-size: 2em;
       }
+      .nav-tab {
+        font-size: 14px;
+        padding: 12px 8px;
+      }
+      .earnings-info {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -404,28 +658,74 @@ WATCHLIST_HTML = """
     <h1>📊 Banshee Watchlist</h1>
     <p class="subtitle">Monitor your earnings calls and stock alerts</p>
     
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchTab('watchlist')">📋 Watchlist</button>
+      <button class="nav-tab" onclick="switchTab('upcoming')">📅 Upcoming Calls</button>
+    </div>
+    
     <div id="message"></div>
     
-    <div class="stats">
-      <span id="ticker-count">Loading...</span>
+    <!-- Watchlist Tab -->
+    <div id="watchlist-tab" class="tab-content active">
+      <div class="stats">
+        <span id="ticker-count">Loading...</span>
+      </div>
+      
+      <div class="add-form">
+        <h3>Add New Ticker</h3>
+        <form id="add-form">
+          <div class="form-row">
+            <input type="text" id="ticker" placeholder="Enter ticker symbol (e.g., AAPL)" required>
+            <button type="submit">Add Ticker</button>
+          </div>
+        </form>
+      </div>
+      
+      <div id="loading" class="loading">Loading watchlist...</div>
+      <ul id="watchlist" class="watchlist" style="display: none;"></ul>
     </div>
     
-    <div class="add-form">
-      <h3>Add New Ticker</h3>
-      <form id="add-form">
-        <div class="form-row">
-          <input type="text" id="ticker" placeholder="Enter ticker symbol (e.g., AAPL)" required>
-          <button type="submit">Add Ticker</button>
-        </div>
-      </form>
+    <!-- Upcoming Calls Tab -->
+    <div id="upcoming-tab" class="tab-content">
+      <div class="stats">
+        <span id="earnings-count">Loading upcoming earnings...</span>
+      </div>
+      
+      <div id="earnings-loading" class="loading">Loading upcoming calls...</div>
+      <ul id="earnings-list" class="earnings-list" style="display: none;"></ul>
     </div>
-    
-    <div id="loading" class="loading">Loading watchlist...</div>
-    <ul id="watchlist" class="watchlist" style="display: none;"></ul>
+  </div>
+
+  <!-- Modal for countdown timer -->
+  <div id="countdown-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-ticker"></h2>
+        <span class="close" onclick="closeModal()">&times;</span>
+      </div>
+      <div class="modal-countdown" id="modal-countdown"></div>
+      <div class="earnings-info" id="modal-info"></div>
+    </div>
   </div>
 
   <script>
     const apiKey = '{api_key}';
+    let countdownInterval = null;
+    let currentEarningsData = null;
+    
+    function switchTab(tabName) {
+      // Update tab buttons
+      document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
+      event.target.classList.add('active');
+      
+      // Update tab content
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      document.getElementById(tabName + '-tab').classList.add('active');
+      
+      if (tabName === 'upcoming') {
+        loadUpcomingEarnings();
+      }
+    }
     
     function showMessage(text, type = 'success') {
       const messageDiv = document.getElementById('message');
@@ -436,6 +736,11 @@ WATCHLIST_HTML = """
     function updateStats(count) {
       const statsEl = document.getElementById('ticker-count');
       statsEl.textContent = `${count} ticker${count !== 1 ? 's' : ''} on watchlist`;
+    }
+    
+    function updateEarningsStats(count) {
+      const statsEl = document.getElementById('earnings-count');
+      statsEl.textContent = `${count} upcoming earnings call${count !== 1 ? 's' : ''}`;
     }
     
     async function loadWatchlist() {
@@ -483,6 +788,198 @@ WATCHLIST_HTML = """
         loadingEl.style.display = 'none';
         listEl.style.display = 'block';
         updateStats(0);
+      }
+    }
+    
+    async function loadUpcomingEarnings() {
+      const loadingEl = document.getElementById('earnings-loading');
+      const listEl = document.getElementById('earnings-list');
+      
+      try {
+        loadingEl.style.display = 'block';
+        listEl.style.display = 'none';
+        
+        const resp = await fetch('/earnings/upcoming', {
+          headers: {'X-API-Key': apiKey}
+        });
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        }
+        
+        const data = await resp.json();
+        const calls = data.calls || [];
+        currentEarningsData = calls;
+        
+        listEl.innerHTML = '';
+        updateEarningsStats(calls.length);
+        
+        if (calls.length === 0) {
+          listEl.innerHTML = '<div class="empty-state">No upcoming earnings calls found.</div>';
+        } else {
+          calls.forEach((call, index) => {
+            const callTime = new Date(call.call_time);
+            const timeString = callTime.toLocaleString();
+            
+            const li = document.createElement('li');
+            li.className = 'earnings-item';
+            li.innerHTML = `
+              <div class="earnings-header" onclick="showCountdown(${index})">
+                <div>
+                  <span class="ticker-name">${call.ticker.toUpperCase()}</span>
+                  <div class="earnings-time">${timeString}</div>
+                </div>
+                <div class="countdown" id="countdown-${index}"></div>
+              </div>
+              <div class="earnings-details" id="details-${index}">
+                <div class="earnings-info">
+                  ${call.estimated_eps ? `<div class="info-item"><div class="info-label">Est. EPS</div><div class="info-value">$${call.estimated_eps}</div></div>` : ''}
+                  ${call.estimated_revenue ? `<div class="info-item"><div class="info-label">Est. Revenue</div><div class="info-value">$${(call.estimated_revenue / 1000000).toFixed(0)}M</div></div>` : ''}
+                  ${call.actual_eps ? `<div class="info-item"><div class="info-label">Actual EPS</div><div class="info-value">$${call.actual_eps}</div></div>` : ''}
+                  ${call.actual_revenue ? `<div class="info-item"><div class="info-label">Actual Revenue</div><div class="info-value">$${(call.actual_revenue / 1000000).toFixed(0)}M</div></div>` : ''}
+                </div>
+              </div>
+            `;
+            listEl.appendChild(li);
+          });
+          
+          // Start countdown timers
+          updateCountdowns();
+          setInterval(updateCountdowns, 100); // Update every 100ms for millisecond precision
+        }
+        
+        loadingEl.style.display = 'none';
+        listEl.style.display = 'block';
+        
+      } catch (error) {
+        console.error('Error loading earnings:', error);
+        showMessage(`Error loading earnings: ${error.message}`, 'error');
+        loadingEl.style.display = 'none';
+        listEl.style.display = 'block';
+        updateEarningsStats(0);
+      }
+    }
+    
+    function updateCountdowns() {
+      if (!currentEarningsData) return;
+      
+      const now = new Date();
+      
+      currentEarningsData.forEach((call, index) => {
+        const callTime = new Date(call.call_time);
+        const diff = callTime - now;
+        
+        const countdownEl = document.getElementById(`countdown-${index}`);
+        if (!countdownEl) return;
+        
+        if (diff <= 0) {
+          countdownEl.textContent = 'LIVE NOW';
+          countdownEl.className = 'countdown urgent';
+          return;
+        }
+        
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        const milliseconds = Math.floor((diff % 1000) / 10); // Show centiseconds
+        
+        let countdownText = '';
+        if (days > 0) {
+          countdownText = `${days}d ${hours}h ${minutes}m`;
+          countdownEl.className = 'countdown normal';
+        } else if (hours > 0) {
+          countdownText = `${hours}h ${minutes}m ${seconds}s`;
+          countdownEl.className = 'countdown soon';
+        } else {
+          countdownText = `${minutes}m ${seconds}.${milliseconds.toString().padStart(2, '0')}s`;
+          countdownEl.className = 'countdown urgent';
+        }
+        
+        countdownEl.textContent = countdownText;
+      });
+    }
+    
+    function showCountdown(index) {
+      if (!currentEarningsData || !currentEarningsData[index]) return;
+      
+      const call = currentEarningsData[index];
+      document.getElementById('modal-ticker').textContent = `${call.ticker.toUpperCase()} Earnings Call`;
+      
+      // Show modal
+      document.getElementById('countdown-modal').style.display = 'block';
+      
+      // Start modal countdown
+      if (countdownInterval) clearInterval(countdownInterval);
+      countdownInterval = setInterval(() => {
+        const now = new Date();
+        const callTime = new Date(call.call_time);
+        const diff = callTime - now;
+        
+        const modalCountdownEl = document.getElementById('modal-countdown');
+        
+        if (diff <= 0) {
+          modalCountdownEl.textContent = '🚨 EARNINGS CALL IS LIVE! 🚨';
+          modalCountdownEl.style.color = '#e74c3c';
+          return;
+        }
+        
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        const milliseconds = diff % 1000;
+        
+        let countdownText = '';
+        if (days > 0) {
+          countdownText = `${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
+        } else {
+          countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
+        }
+        
+        modalCountdownEl.textContent = countdownText;
+        
+        // Color coding
+        if (diff < 60000) { // Less than 1 minute
+          modalCountdownEl.style.color = '#e74c3c';
+        } else if (diff < 3600000) { // Less than 1 hour
+          modalCountdownEl.style.color = '#f39c12';
+        } else {
+          modalCountdownEl.style.color = '#27ae60';
+        }
+      }, 10); // Update every 10ms for high precision
+      
+      // Populate modal info
+      const modalInfo = document.getElementById('modal-info');
+      modalInfo.innerHTML = `
+        <div class="info-item">
+          <div class="info-label">Date & Time</div>
+          <div class="info-value">${new Date(call.call_time).toLocaleString()}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Status</div>
+          <div class="info-value">${call.status}</div>
+        </div>
+        ${call.estimated_eps ? `<div class="info-item"><div class="info-label">Estimated EPS</div><div class="info-value">$${call.estimated_eps}</div></div>` : ''}
+        ${call.estimated_revenue ? `<div class="info-item"><div class="info-label">Estimated Revenue</div><div class="info-value">$${(call.estimated_revenue / 1000000).toFixed(0)}M</div></div>` : ''}
+        ${call.actual_eps ? `<div class="info-item"><div class="info-label">Actual EPS</div><div class="info-value">$${call.actual_eps}</div></div>` : ''}
+        ${call.actual_revenue ? `<div class="info-item"><div class="info-label">Actual Revenue</div><div class="info-value">$${(call.actual_revenue / 1000000).toFixed(0)}M</div></div>` : ''}
+      `;
+    }
+    
+    function closeModal() {
+      document.getElementById('countdown-modal').style.display = 'none';
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+      }
+    }
+    
+    // Close modal when clicking outside of it
+    window.onclick = function(event) {
+      const modal = document.getElementById('countdown-modal');
+      if (event.target === modal) {
+        closeModal();
       }
     }
     

@@ -145,6 +145,13 @@ resource "google_project_iam_member" "cloud_run_invoker" {
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
 
+# Allow Cloud Run SA to access Secret Manager secrets
+resource "google_project_iam_member" "cloud_run_secret_accessor" {
+  project = var.project
+  role    = "roles/secretmanager.secretAccessor"
+  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
 resource "google_secret_manager_secret" "alert_from_email" {
   secret_id = "alert-from-email"
   replication {
@@ -168,6 +175,19 @@ resource "google_secret_manager_secret" "web_password" {
 resource "google_secret_manager_secret_version" "web_password" {
   secret      = google_secret_manager_secret.web_password.id
   secret_data = var.web_password
+}
+
+# Alert recipients secret
+resource "google_secret_manager_secret" "alert_recipients" {
+  secret_id = "alert-recipients"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "alert_recipients" {
+  secret      = google_secret_manager_secret.alert_recipients.id
+  secret_data = jsonencode(var.alert_recipients)
 }
 
 # Allow Cloud Run SA to write to logs bucket

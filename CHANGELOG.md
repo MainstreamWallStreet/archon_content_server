@@ -3,6 +3,10 @@
 
 ## Unreleased
 ### Added
+- **Enhanced Email Alert Logging**: Comprehensive logging now shows exactly which email addresses are receiving alerts, with detailed success/failure status for each recipient
+- **Improved Alert Recipients Handling**: Better error handling and validation for the `ALERT_RECIPIENTS` array, ensuring all configured emails receive alerts
+- **Secret Manager Integration**: Added `alert-recipients` secret in Terraform to properly handle the array of email addresses
+- **Robust Error Recovery**: Alert system now continues sending to remaining recipients even if some emails fail
 - SendGrid email helper for notifications.
 - `ALERT_RECIPIENTS` env var supports multiple alert emails.
 - Script `scripts/watchlist_demo.py` demonstrates adding and removing a ticker.
