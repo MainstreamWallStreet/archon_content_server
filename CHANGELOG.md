@@ -35,6 +35,7 @@
   - `test_list_all_jobs` now properly cleans up the GCS bucket before running, ensuring test isolation and reliability.
   - Added fixture logic to clear jobs and tasks before and after each test.
   - Added pytest-asyncio configuration for async test support.
+- Open Graph and Twitter meta tags for social/share image using inline SVG logo matching the homepage dashboard icon. Now, sharing or texting the app link shows the Banshee logo as the preview image.
 ### Removed
 - Deprecated `/status/{job_id}`, `/jobs`, `/stream/jobs`, and `/stream/tasks` endpoints.
 - Legacy Raven tests replaced with Banshee-specific suite.
