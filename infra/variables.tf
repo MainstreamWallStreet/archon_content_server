@@ -53,3 +53,9 @@ variable "alert_from_email" {
   type        = string
   default     = "gclark0812@gmail.com"
 }
+
+variable "banshee_web_password" {
+  description = "Password for the Banshee web interface"
+  type        = string
+  sensitive   = true
+}

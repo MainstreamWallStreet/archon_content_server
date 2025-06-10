@@ -18,6 +18,7 @@
 - Job queue now persists to Google Cloud Storage with per-job origin tracking.
 - Quarterly data version tracking with `QUARTERLY_FILING_DATA_VERSION` and
   `TRANSCRIPT_DATA_VERSION` now added to docs as `data_version = n`.
+- Simple password-protected web UI for managing the watchlist.
 - Google Drive storage now creates a `Q<quarter>` folder within each year
   folder, and document titles follow `TICKER YYYY QN - <doctype>`.
 - **GCS-backed job queue:**

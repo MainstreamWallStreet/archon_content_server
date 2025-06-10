@@ -157,6 +157,19 @@ resource "google_secret_manager_secret_version" "alert_from_email" {
   secret_data = var.alert_from_email
 }
 
+# Web interface password secret
+resource "google_secret_manager_secret" "web_password" {
+  secret_id = "banshee-web-password"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "web_password" {
+  secret      = google_secret_manager_secret.web_password.id
+  secret_data = var.web_password
+}
+
 # Allow Cloud Run SA to write to logs bucket
 resource "google_storage_bucket_iam_member" "cloud_run_logs_writer" {
   bucket = "banshee-tf-state-202407"
