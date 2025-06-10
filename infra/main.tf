@@ -152,6 +152,15 @@ resource "google_project_iam_member" "cloud_run_secret_accessor" {
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
 
+# Allow public access to Cloud Run service
+resource "google_cloud_run_service_iam_member" "public_access" {
+  location = var.region
+  project  = var.project
+  service  = "banshee-api"
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
 # API key secrets
 resource "google_secret_manager_secret" "api_ninjas_key" {
   secret_id = "api-ninjas-key"
