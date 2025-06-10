@@ -82,7 +82,7 @@ def web_login(password: str = Form(...)):
     """Simple password-based login for web interface."""
     expected_password = get_setting("BANSHEE_WEB_PASSWORD")
     if not secrets.compare_digest(password, expected_password):
-        return HTMLResponse(content=LOGIN_HTML.replace("{error}", "<div class='error'>Invalid password. Please try again.</div>"), status_code=401)
+        return HTMLResponse(content=LOGIN_HTML.replace("{error}", "<div class='error'><i class='fas fa-exclamation-triangle'></i>Invalid password. Please try again.</div>"), status_code=401)
     
     # Create a simple session token
     import uuid
@@ -245,7 +245,9 @@ LOGIN_HTML = """
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Banshee Login</title>
+  <title>Banshee - Earnings Monitor</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 448 512'><path fill='%23667eea' d='M384 32c35.3 0 64 28.7 64 64v320c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V96C0 60.7 28.7 32 64 32h320zM160 144c0-8.8 7.2-16 16-16h32c8.8 0 16 7.2 16 16s-7.2 16-16 16H176c-8.8 0-16-7.2-16-16zm16 80h32c8.8 0 16 7.2 16 16s-7.2 16-16 16H176c-8.8 0-16-7.2-16-16s7.2-16 16-16zm-16 80c0-8.8 7.2-16 16-16h32c8.8 0 16 7.2 16 16s-7.2 16-16 16H176c-8.8 0-16-7.2-16-16zm144-96c8.8 0 16-7.2 16-16s-7.2-16-16-16H272c-8.8 0-16 7.2-16 16s7.2 16 16 16h32zm16 48c0-8.8-7.2-16-16-16H272c-8.8 0-16 7.2-16 16s7.2 16 16 16h32c8.8 0 16-7.2 16-16zm-16 80c8.8 0 16-7.2 16-16s-7.2-16-16-16H272c-8.8 0-16 7.2-16 16s7.2 16 16 16h32z'/></svg>" type="image/svg+xml">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <style>
     * {
       margin: 0;
@@ -253,86 +255,215 @@ LOGIN_HTML = """
       box-sizing: border-box;
     }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
+      padding: 1rem;
     }
     .login-container {
-      background: white;
-      padding: 40px;
-      border-radius: 10px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      padding: 2.5rem;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.1), 0 0 0 1px rgba(255,255,255,0.1);
       width: 100%;
-      max-width: 400px;
+      max-width: 420px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-radius: 20px;
+      margin-bottom: 1rem;
+      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    }
+    .logo i {
+      font-size: 2.5rem;
+      color: white;
     }
     h1 {
-      text-align: center;
       color: #2c3e50;
-      margin-bottom: 30px;
-      font-size: 2em;
-      font-weight: 300;
+      margin-bottom: 0.5rem;
+      font-size: 1.75rem;
+      font-weight: 600;
+    }
+    .subtitle {
+      color: #64748b;
+      font-size: 0.95rem;
+      font-weight: 400;
     }
     .form-group {
-      margin-bottom: 20px;
+      margin-bottom: 1.5rem;
+      position: relative;
     }
     label {
       display: block;
-      margin-bottom: 8px;
-      color: #555;
+      margin-bottom: 0.5rem;
+      color: #374151;
       font-weight: 500;
+      font-size: 0.9rem;
+    }
+    .input-wrapper {
+      position: relative;
+    }
+    .input-icon {
+      position: absolute;
+      left: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #9ca3af;
+      z-index: 1;
     }
     input[type="password"] {
       width: 100%;
-      padding: 12px;
-      border: 2px solid #e0e6ed;
-      border-radius: 6px;
-      font-size: 16px;
-      transition: border-color 0.3s;
+      padding: 1rem 1rem 1rem 3rem;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10px);
     }
     input[type="password"]:focus {
       outline: none;
       border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      background: rgba(255, 255, 255, 0.95);
     }
     button {
       width: 100%;
-      background: #667eea;
+      background: linear-gradient(135deg, #667eea, #764ba2);
       color: white;
       border: none;
-      padding: 12px;
-      border-radius: 6px;
+      padding: 1rem;
+      border-radius: 12px;
       cursor: pointer;
-      font-size: 16px;
-      transition: background 0.3s;
-      font-weight: 500;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
     }
     button:hover {
-      background: #5a67d8;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+    }
+    button:active {
+      transform: translateY(0);
     }
     .error {
-      background: #f8d7da;
-      color: #721c24;
-      padding: 12px;
-      border-radius: 6px;
-      margin-bottom: 20px;
-      border: 1px solid #f5c6cb;
+      background: linear-gradient(135deg, #fef2f2, #fee2e2);
+      color: #dc2626;
+      padding: 1rem;
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+      border: 1px solid #fecaca;
       text-align: center;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    .features {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #e5e7eb;
+    }
+    .feature {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+    .feature-icon {
+      color: #667eea;
+      width: 16px;
+    }
+    @media (max-width: 480px) {
+      .login-container {
+        padding: 2rem 1.5rem;
+        border-radius: 16px;
+      }
+      h1 {
+        font-size: 1.5rem;
+      }
+      .logo {
+        width: 70px;
+        height: 70px;
+      }
+      .logo i {
+        font-size: 2rem;
+      }
+    }
+    @media (max-width: 360px) {
+      body {
+        padding: 0.5rem;
+      }
+      .login-container {
+        padding: 1.5rem 1rem;
+      }
     }
   </style>
 </head>
 <body>
   <div class="login-container">
-    <h1>📊 Banshee Access</h1>
+    <div class="header">
+      <div class="logo">
+        <i class="fas fa-chart-line"></i>
+      </div>
+      <h1>Banshee Access</h1>
+      <p class="subtitle">Monitor earnings calls & market alerts</p>
+    </div>
+    
     {error}
+    
     <form method="post" action="/web-login">
       <div class="form-group">
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" required autofocus>
+        <label for="password">
+          <i class="fas fa-shield-alt"></i> Access Code
+        </label>
+        <div class="input-wrapper">
+          <i class="fas fa-lock input-icon"></i>
+          <input type="password" id="password" name="password" required autofocus autocomplete="current-password">
+        </div>
       </div>
-      <button type="submit">Access Watchlist</button>
+      <button type="submit">
+        <i class="fas fa-sign-in-alt"></i>
+        Access Dashboard
+      </button>
     </form>
+    
+    <div class="features">
+      <div class="feature">
+        <i class="fas fa-eye feature-icon"></i>
+        <span>Real-time earnings monitoring</span>
+      </div>
+      <div class="feature">
+        <i class="fas fa-bell feature-icon"></i>
+        <span>Intelligent alert system</span>
+      </div>
+      <div class="feature">
+        <i class="fas fa-mobile-alt feature-icon"></i>
+        <span>Mobile-optimized interface</span>
+      </div>
+    </div>
   </div>
 </body>
 </html>
@@ -345,7 +476,9 @@ WATCHLIST_HTML = """
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Banshee Watchlist</title>
+  <title>Banshee - Earnings Monitor</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 448 512'><path fill='%23667eea' d='M384 32c35.3 0 64 28.7 64 64v320c0 35.3-28.7 64-64 64H64c-35.3 0-64-28.7-64-64V96C0 60.7 28.7 32 64 32h320zM160 144c0-8.8 7.2-16 16-16h32c8.8 0 16 7.2 16 16s-7.2 16-16 16H176c-8.8 0-16-7.2-16-16zm16 80h32c8.8 0 16 7.2 16 16s-7.2 16-16 16H176c-8.8 0-16-7.2-16-16s7.2-16 16-16zm-16 80c0-8.8 7.2-16 16-16h32c8.8 0 16 7.2 16 16s-7.2 16-16 16H176c-8.8 0-16-7.2-16-16zm144-96c8.8 0 16-7.2 16-16s-7.2-16-16-16H272c-8.8 0-16 7.2-16 16s7.2 16 16 16h32zm16 48c0-8.8-7.2-16-16-16H272c-8.8 0-16 7.2-16 16s7.2 16 16 16h32c8.8 0 16-7.2 16-16zm-16 80c8.8 0 16-7.2 16-16s-7.2-16-16-16H272c-8.8 0-16 7.2-16 16s7.2 16 16 16h32z'/></svg>" type="image/svg+xml">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <style>
     * {
       margin: 0;
@@ -354,45 +487,94 @@ WATCHLIST_HTML = """
     }
     html, body {
       height: 100%;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       line-height: 1.6;
-      color: #333;
+      color: #1f2937;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       background-attachment: fixed;
     }
     .container {
       background: rgba(255, 255, 255, 0.95);
-      border-radius: 10px;
-      padding: 30px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      backdrop-filter: blur(20px);
+      border-radius: 24px;
+      padding: 2rem;
+      box-shadow: 0 25px 50px rgba(0,0,0,0.1), 0 0 0 1px rgba(255,255,255,0.1);
       max-width: 1200px;
-      margin: 20px auto;
-      min-height: calc(100vh - 40px);
+      margin: 1rem auto;
+      min-height: calc(100vh - 2rem);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 2px solid rgba(102, 126, 234, 0.1);
+    }
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 60px;
+      height: 60px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-radius: 16px;
+      margin-bottom: 1rem;
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+    }
+    .logo i {
+      font-size: 1.5rem;
+      color: white;
+    }
+    h1 {
+      color: #1f2937;
+      margin-bottom: 0.5rem;
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .subtitle {
+      color: #6b7280;
+      font-size: 1rem;
+      font-weight: 400;
     }
     .nav-tabs {
       display: flex;
-      border-bottom: 2px solid #e0e6ed;
-      margin-bottom: 30px;
+      background: rgba(243, 244, 246, 0.6);
+      border-radius: 16px;
+      padding: 0.25rem;
+      margin-bottom: 2rem;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(229, 231, 235, 0.8);
     }
     .nav-tab {
       flex: 1;
       text-align: center;
-      padding: 15px;
+      padding: 0.875rem 1rem;
       background: none;
       border: none;
-      font-size: 16px;
-      font-weight: 500;
-      color: #7f8c8d;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #6b7280;
       cursor: pointer;
-      transition: all 0.3s;
-      border-bottom: 3px solid transparent;
+      transition: all 0.2s ease;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
     }
     .nav-tab.active {
-      color: #667eea;
-      border-bottom-color: #667eea;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+      transform: translateY(-1px);
     }
-    .nav-tab:hover {
+    .nav-tab:hover:not(.active) {
       background: rgba(102, 126, 234, 0.1);
+      color: #667eea;
     }
     .tab-content {
       display: none;
@@ -400,128 +582,214 @@ WATCHLIST_HTML = """
     .tab-content.active {
       display: block;
     }
-    h1 {
-      color: #2c3e50;
-      margin-bottom: 30px;
+    .stats-card {
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+      border: 1px solid rgba(102, 126, 234, 0.2);
+      border-radius: 16px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
       text-align: center;
-      font-size: 2.5em;
-      font-weight: 300;
+      backdrop-filter: blur(10px);
     }
-    .subtitle {
-      text-align: center;
-      color: #7f8c8d;
-      margin-bottom: 40px;
-      font-size: 1.1em;
+    .stats {
+      color: #667eea;
+      font-weight: 600;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
     }
     .add-form {
-      background: #f8f9fa;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 30px;
-      border-left: 4px solid #667eea;
+      background: rgba(248, 250, 252, 0.8);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      padding: 1.5rem;
+      border-radius: 20px;
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    }
+    .form-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      color: #374151;
+      font-weight: 600;
+    }
+    .form-header i {
+      color: #667eea;
     }
     .form-row {
       display: flex;
-      gap: 10px;
-      margin-bottom: 15px;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .input-group {
+      position: relative;
+      flex: 1;
+    }
+    .input-icon {
+      position: absolute;
+      left: 1rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #9ca3af;
+      z-index: 1;
     }
     input[type="text"] {
-      flex: 1;
-      padding: 12px;
-      border: 2px solid #e0e6ed;
-      border-radius: 6px;
-      font-size: 16px;
-      transition: border-color 0.3s;
+      width: 100%;
+      padding: 1rem 1rem 1rem 3rem;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 1rem;
+      transition: all 0.2s ease;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10px);
     }
     input[type="text"]:focus {
       outline: none;
       border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      background: rgba(255, 255, 255, 0.95);
     }
     button {
-      background: #667eea;
+      background: linear-gradient(135deg, #667eea, #764ba2);
       color: white;
       border: none;
-      padding: 12px 24px;
-      border-radius: 6px;
+      padding: 1rem 1.5rem;
+      border-radius: 12px;
       cursor: pointer;
-      font-size: 16px;
-      transition: background 0.3s;
-      font-weight: 500;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+      white-space: nowrap;
     }
     button:hover {
-      background: #5a67d8;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+    }
+    button:active {
+      transform: translateY(0);
     }
     .delete-btn {
-      background: #e74c3c;
-      padding: 6px 12px;
-      font-size: 14px;
-      margin-left: 10px;
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+      box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+      border-radius: 8px;
     }
     .delete-btn:hover {
-      background: #c0392b;
+      box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
     }
     .watchlist, .earnings-list {
       list-style: none;
+      display: grid;
+      gap: 1rem;
     }
-    .ticker-item, .earnings-item {
-      background: white;
-      margin-bottom: 10px;
-      padding: 15px;
-      border-radius: 6px;
-      border: 1px solid #e0e6ed;
+    .card {
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(15px);
+      border: 1px solid rgba(229, 231, 235, 0.8);
+      border-radius: 16px;
+      padding: 1.25rem;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+      border-color: rgba(102, 126, 234, 0.3);
+    }
+    .ticker-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      transition: box-shadow 0.3s;
       cursor: pointer;
-    }
-    .ticker-item:hover, .earnings-item:hover {
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     .earnings-item {
       cursor: default;
-      flex-direction: column;
-      align-items: stretch;
+    }
+    .ticker-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .ticker-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-radius: 10px;
+      color: white;
+      font-weight: 600;
+      font-size: 0.875rem;
+    }
+    .ticker-name {
+      font-weight: 700;
+      color: #1f2937;
+      font-size: 1.125rem;
     }
     .earnings-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
+      margin-bottom: 1rem;
       cursor: pointer;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(229, 231, 235, 0.6);
     }
     .earnings-details {
       display: none;
-      padding-top: 10px;
-      border-top: 1px solid #e0e6ed;
+      padding-top: 1rem;
     }
     .earnings-details.show {
       display: block;
     }
-    .ticker-name {
-      font-weight: 600;
-      color: #2c3e50;
-      font-size: 1.1em;
+    .earnings-ticker {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
     }
     .earnings-time {
-      color: #7f8c8d;
-      font-size: 0.9em;
+      color: #6b7280;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
     .countdown {
       font-family: 'Monaco', 'Consolas', monospace;
-      font-size: 1.1em;
-      font-weight: bold;
-      color: #e74c3c;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
     .countdown.urgent {
-      color: #e74c3c;
+      background: linear-gradient(135deg, #fef2f2, #fee2e2);
+      color: #dc2626;
+      border: 1px solid #fecaca;
       animation: pulse 1s infinite;
     }
     .countdown.soon {
-      color: #f39c12;
+      background: linear-gradient(135deg, #fffbeb, #fef3c7);
+      color: #d97706;
+      border: 1px solid #fed7aa;
     }
     .countdown.normal {
-      color: #27ae60;
+      background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+      color: #16a34a;
+      border: 1px solid #bbf7d0;
     }
     @keyframes pulse {
       0% { opacity: 1; }
@@ -530,38 +798,59 @@ WATCHLIST_HTML = """
     }
     .empty-state {
       text-align: center;
-      color: #7f8c8d;
+      color: #6b7280;
       font-style: italic;
-      padding: 40px;
-      background: #f8f9fa;
-      border-radius: 8px;
-      border: 2px dashed #e0e6ed;
+      padding: 3rem 2rem;
+      background: linear-gradient(135deg, rgba(248, 250, 252, 0.8), rgba(241, 245, 249, 0.8));
+      border-radius: 16px;
+      border: 2px dashed #cbd5e1;
+      backdrop-filter: blur(10px);
+    }
+    .empty-icon {
+      font-size: 3rem;
+      color: #cbd5e1;
+      margin-bottom: 1rem;
     }
     .loading {
       text-align: center;
       color: #667eea;
-      font-weight: 500;
+      font-weight: 600;
+      padding: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+    }
+    .loading i {
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .message {
+      margin-bottom: 1.5rem;
     }
     .error {
-      background: #f8d7da;
-      color: #721c24;
-      padding: 12px;
-      border-radius: 6px;
-      margin-bottom: 20px;
-      border: 1px solid #f5c6cb;
+      background: linear-gradient(135deg, #fef2f2, #fee2e2);
+      color: #dc2626;
+      padding: 1rem;
+      border-radius: 12px;
+      border: 1px solid #fecaca;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 500;
     }
     .success {
-      background: #d4edda;
-      color: #155724;
-      padding: 12px;
-      border-radius: 6px;
-      margin-bottom: 20px;
-      border: 1px solid #c3e6cb;
-    }
-    .stats {
-      text-align: center;
-      margin-bottom: 30px;
-      color: #667eea;
+      background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+      color: #16a34a;
+      padding: 1rem;
+      border-radius: 12px;
+      border: 1px solid #bbf7d0;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
       font-weight: 500;
     }
     .modal {
@@ -572,80 +861,158 @@ WATCHLIST_HTML = """
       top: 0;
       width: 100%;
       height: 100%;
-      background-color: rgba(0,0,0,0.5);
+      background-color: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
     }
     .modal-content {
-      background-color: white;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
       margin: 5% auto;
-      padding: 30px;
-      border-radius: 10px;
+      padding: 2rem;
+      border-radius: 20px;
       width: 90%;
       max-width: 600px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      box-shadow: 0 25px 50px rgba(0,0,0,0.2);
+      border: 1px solid rgba(255, 255, 255, 0.2);
     }
     .modal-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 20px;
-      padding-bottom: 15px;
-      border-bottom: 1px solid #e0e6ed;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 2px solid rgba(229, 231, 235, 0.6);
+    }
+    .modal-title {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: #1f2937;
+      font-weight: 700;
+      font-size: 1.25rem;
     }
     .close {
-      color: #aaa;
-      font-size: 28px;
+      color: #9ca3af;
+      font-size: 1.5rem;
       font-weight: bold;
       cursor: pointer;
       line-height: 1;
+      padding: 0.5rem;
+      border-radius: 8px;
+      transition: all 0.2s ease;
     }
     .close:hover {
       color: #667eea;
+      background: rgba(102, 126, 234, 0.1);
     }
     .modal-countdown {
       text-align: center;
       font-family: 'Monaco', 'Consolas', monospace;
-      font-size: 2em;
-      margin: 20px 0;
-      padding: 20px;
-      background: #f8f9fa;
-      border-radius: 8px;
-      border: 2px solid #e0e6ed;
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin: 1.5rem 0;
+      padding: 2rem;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+      border-radius: 16px;
+      border: 2px solid rgba(102, 126, 234, 0.2);
+      color: #667eea;
     }
     .earnings-info {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 15px;
-      margin-top: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 1.5rem;
     }
     .info-item {
-      padding: 10px;
-      background: #f8f9fa;
-      border-radius: 6px;
+      padding: 1rem;
+      background: rgba(248, 250, 252, 0.8);
+      border-radius: 12px;
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      backdrop-filter: blur(10px);
     }
     .info-label {
       font-weight: 600;
-      color: #2c3e50;
-      font-size: 0.9em;
+      color: #374151;
+      font-size: 0.875rem;
+      margin-bottom: 0.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
     .info-value {
-      color: #7f8c8d;
-      font-size: 1.1em;
+      color: #667eea;
+      font-size: 1.125rem;
+      font-weight: 700;
     }
-    @media (max-width: 600px) {
+    
+    /* Desktop delete button - hidden on mobile */
+    .desktop-delete {
+      display: flex;
+    }
+    
+    /* Mobile delete button - hidden by default, shown on mobile */
+    .mobile-delete {
+      display: none;
+    }
+    
+    /* Mobile-specific styles */
+    @media (max-width: 768px) {
+      .desktop-delete {
+        display: none;
+      }
+      
+      .card {
+        padding: 1rem;
+        border-radius: 12px;
+      }
+      
+      .ticker-item {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 1rem;
+      }
+      
+      .ticker-info {
+        justify-content: center;
+      }
+      
+      .mobile-delete {
+        display: flex;
+        justify-content: center;
+        width: 100%;
+      }
+      
+      .delete-btn {
+        width: 100%;
+        max-width: 200px;
+        justify-content: center;
+        padding: 0.75rem 1rem;
+      }
+      
       .container {
-        margin: 10px;
-        padding: 20px;
-        min-height: calc(100vh - 20px);
+        margin: 0.5rem;
+        padding: 1.5rem;
+        min-height: calc(100vh - 1rem);
+        border-radius: 20px;
+      }
+      h1 {
+        font-size: 1.75rem;
       }
       .form-row {
         flex-direction: column;
       }
-      h1 {
-        font-size: 2em;
-      }
       .nav-tab {
-        font-size: 14px;
-        padding: 12px 8px;
+        font-size: 0.875rem;
+        padding: 0.75rem 0.5rem;
+      }
+      .modal-content {
+        margin: 10% auto;
+        width: 95%;
+        padding: 1.5rem;
+      }
+      .modal-countdown {
+        font-size: 2rem;
+        padding: 1.5rem;
       }
       .earnings-info {
         grid-template-columns: 1fr;
@@ -655,43 +1022,75 @@ WATCHLIST_HTML = """
 </head>
 <body>
   <div class="container">
-    <h1>📊 Banshee Watchlist</h1>
-    <p class="subtitle">Monitor your earnings calls and stock alerts</p>
-    
-    <div class="nav-tabs">
-      <button class="nav-tab active" onclick="switchTab('watchlist')">📋 Watchlist</button>
-      <button class="nav-tab" onclick="switchTab('upcoming')">📅 Upcoming Calls</button>
+    <div class="header">
+      <div class="logo">
+        <i class="fas fa-chart-line"></i>
+      </div>
+      <h1>Banshee Dashboard</h1>
+      <p class="subtitle">Monitor earnings calls & market alerts in real-time</p>
     </div>
     
-    <div id="message"></div>
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchTab('watchlist')">
+        <i class="fas fa-list-ul"></i>
+        <span class="tab-text">Watchlist</span>
+      </button>
+      <button class="nav-tab" onclick="switchTab('upcoming')">
+        <i class="fas fa-calendar-alt"></i>
+        <span class="tab-text">Upcoming Calls</span>
+      </button>
+    </div>
+    
+    <div id="message" class="message"></div>
     
     <!-- Watchlist Tab -->
     <div id="watchlist-tab" class="tab-content active">
-      <div class="stats">
-        <span id="ticker-count">Loading...</span>
+      <div class="stats-card">
+        <div class="stats">
+          <i class="fas fa-chart-bar"></i>
+          <span id="ticker-count">Loading...</span>
+        </div>
       </div>
       
       <div class="add-form">
-        <h3>Add New Ticker</h3>
+        <div class="form-header">
+          <i class="fas fa-plus-circle"></i>
+          <span>Add New Ticker</span>
+        </div>
         <form id="add-form">
           <div class="form-row">
-            <input type="text" id="ticker" placeholder="Enter ticker symbol (e.g., AAPL)" required>
-            <button type="submit">Add Ticker</button>
+            <div class="input-group">
+              <i class="fas fa-search input-icon"></i>
+              <input type="text" id="ticker" placeholder="Enter ticker symbol (e.g., AAPL)" required>
+            </div>
+            <button type="submit">
+              <i class="fas fa-plus"></i>
+              <span>Add</span>
+            </button>
           </div>
         </form>
       </div>
       
-      <div id="loading" class="loading">Loading watchlist...</div>
+      <div id="loading" class="loading">
+        <i class="fas fa-spinner"></i>
+        <span>Loading watchlist...</span>
+      </div>
       <ul id="watchlist" class="watchlist" style="display: none;"></ul>
     </div>
     
     <!-- Upcoming Calls Tab -->
     <div id="upcoming-tab" class="tab-content">
-      <div class="stats">
-        <span id="earnings-count">Loading upcoming earnings...</span>
+      <div class="stats-card">
+        <div class="stats">
+          <i class="fas fa-clock"></i>
+          <span id="earnings-count">Loading upcoming earnings...</span>
+        </div>
       </div>
       
-      <div id="earnings-loading" class="loading">Loading upcoming calls...</div>
+      <div id="earnings-loading" class="loading">
+        <i class="fas fa-spinner"></i>
+        <span>Loading upcoming calls...</span>
+      </div>
       <ul id="earnings-list" class="earnings-list" style="display: none;"></ul>
     </div>
   </div>
@@ -700,8 +1099,13 @@ WATCHLIST_HTML = """
   <div id="countdown-modal" class="modal">
     <div class="modal-content">
       <div class="modal-header">
-        <h2 id="modal-ticker"></h2>
-        <span class="close" onclick="closeModal()">&times;</span>
+        <div class="modal-title">
+          <i class="fas fa-stopwatch"></i>
+          <span id="modal-ticker"></span>
+        </div>
+        <span class="close" onclick="closeModal()">
+          <i class="fas fa-times"></i>
+        </span>
       </div>
       <div class="modal-countdown" id="modal-countdown"></div>
       <div class="earnings-info" id="modal-info"></div>
@@ -716,7 +1120,7 @@ WATCHLIST_HTML = """
     function switchTab(tabName) {
       // Update tab buttons
       document.querySelectorAll('.nav-tab').forEach(tab => tab.classList.remove('active'));
-      event.target.classList.add('active');
+      event.target.closest('.nav-tab').classList.add('active');
       
       // Update tab content
       document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
@@ -727,20 +1131,23 @@ WATCHLIST_HTML = """
       }
     }
     
-    function showMessage(text, type = 'success') {
+    function showMessage(text, type = 'success', icon = null) {
       const messageDiv = document.getElementById('message');
-      messageDiv.innerHTML = `<div class="${type}">${text}</div>`;
+      const iconClass = icon || (type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle');
+      messageDiv.innerHTML = `<div class="${type}"><i class="${iconClass}"></i><span>${text}</span></div>`;
       setTimeout(() => messageDiv.innerHTML = '', 5000);
     }
     
     function updateStats(count) {
       const statsEl = document.getElementById('ticker-count');
-      statsEl.textContent = `${count} ticker${count !== 1 ? 's' : ''} on watchlist`;
+      const plural = count !== 1 ? 's' : '';
+      statsEl.textContent = `${count} ticker${plural} being monitored`;
     }
     
     function updateEarningsStats(count) {
       const statsEl = document.getElementById('earnings-count');
-      statsEl.textContent = `${count} upcoming earnings call${count !== 1 ? 's' : ''}`;
+      const plural = count !== 1 ? 's' : '';
+      statsEl.textContent = `${count} upcoming earnings call${plural}`;
     }
     
     async function loadWatchlist() {
@@ -748,7 +1155,7 @@ WATCHLIST_HTML = """
       const listEl = document.getElementById('watchlist');
       
       try {
-        loadingEl.style.display = 'block';
+        loadingEl.style.display = 'flex';
         listEl.style.display = 'none';
         
         const resp = await fetch('/watchlist', {
@@ -766,14 +1173,39 @@ WATCHLIST_HTML = """
         updateStats(tickers.length);
         
         if (tickers.length === 0) {
-          listEl.innerHTML = '<div class="empty-state">No tickers in watchlist yet. Add one above!</div>';
+          listEl.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon">
+                <i class="fas fa-chart-line-down"></i>
+              </div>
+              <p>No tickers in your watchlist yet</p>
+              <small>Add some ticker symbols above to get started!</small>
+            </div>
+          `;
         } else {
           tickers.forEach(ticker => {
             const li = document.createElement('li');
-            li.className = 'ticker-item';
+            li.className = 'card';
             li.innerHTML = `
-              <span class="ticker-name">${ticker.toUpperCase()}</span>
-              <button class="delete-btn" onclick="deleteTicker('${ticker}')">Delete</button>
+              <div class="ticker-item">
+                <div class="ticker-info">
+                  <div class="ticker-icon">${ticker.substring(0, 2).toUpperCase()}</div>
+                  <div>
+                    <div class="ticker-name">${ticker.toUpperCase()}</div>
+                    <small style="color: #6b7280;">Stock Symbol</small>
+                  </div>
+                </div>
+                <button class="delete-btn desktop-delete" onclick="deleteTicker('${ticker}')">
+                  <i class="fas fa-trash"></i>
+                  <span>Remove</span>
+                </button>
+                <div class="mobile-delete">
+                  <button class="delete-btn" onclick="deleteTicker('${ticker}')">
+                    <i class="fas fa-trash"></i>
+                    <span>Remove from Watchlist</span>
+                  </button>
+                </div>
+              </div>
             `;
             listEl.appendChild(li);
           });
@@ -796,7 +1228,7 @@ WATCHLIST_HTML = """
       const listEl = document.getElementById('earnings-list');
       
       try {
-        loadingEl.style.display = 'block';
+        loadingEl.style.display = 'flex';
         listEl.style.display = 'none';
         
         const resp = await fetch('/earnings/upcoming', {
@@ -815,28 +1247,77 @@ WATCHLIST_HTML = """
         updateEarningsStats(calls.length);
         
         if (calls.length === 0) {
-          listEl.innerHTML = '<div class="empty-state">No upcoming earnings calls found.</div>';
+          listEl.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon">
+                <i class="fas fa-calendar-times"></i>
+              </div>
+              <p>No upcoming earnings calls found</p>
+              <small>Check back later for new earnings announcements</small>
+            </div>
+          `;
         } else {
           calls.forEach((call, index) => {
             const callTime = new Date(call.call_time);
             const timeString = callTime.toLocaleString();
             
             const li = document.createElement('li');
-            li.className = 'earnings-item';
+            li.className = 'card earnings-item';
             li.innerHTML = `
               <div class="earnings-header" onclick="showCountdown(${index})">
-                <div>
-                  <span class="ticker-name">${call.ticker.toUpperCase()}</span>
-                  <div class="earnings-time">${timeString}</div>
+                <div class="earnings-ticker">
+                  <div class="ticker-icon">${call.ticker.substring(0, 2).toUpperCase()}</div>
+                  <div>
+                    <div class="ticker-name">${call.ticker.toUpperCase()}</div>
+                    <div class="earnings-time">
+                      <i class="fas fa-clock"></i>
+                      <span>${timeString}</span>
+                    </div>
+                  </div>
                 </div>
-                <div class="countdown" id="countdown-${index}"></div>
+                <div class="countdown" id="countdown-${index}">
+                  <i class="fas fa-hourglass-half"></i>
+                  <span>Loading...</span>
+                </div>
               </div>
               <div class="earnings-details" id="details-${index}">
                 <div class="earnings-info">
-                  ${call.estimated_eps ? `<div class="info-item"><div class="info-label">Est. EPS</div><div class="info-value">$${call.estimated_eps}</div></div>` : ''}
-                  ${call.estimated_revenue ? `<div class="info-item"><div class="info-label">Est. Revenue</div><div class="info-value">$${(call.estimated_revenue / 1000000).toFixed(0)}M</div></div>` : ''}
-                  ${call.actual_eps ? `<div class="info-item"><div class="info-label">Actual EPS</div><div class="info-value">$${call.actual_eps}</div></div>` : ''}
-                  ${call.actual_revenue ? `<div class="info-item"><div class="info-label">Actual Revenue</div><div class="info-value">$${(call.actual_revenue / 1000000).toFixed(0)}M</div></div>` : ''}
+                  ${call.estimated_eps ? `
+                    <div class="info-item">
+                      <div class="info-label">
+                        <i class="fas fa-chart-bar"></i>
+                        Est. EPS
+                      </div>
+                      <div class="info-value">$${call.estimated_eps}</div>
+                    </div>
+                  ` : ''}
+                  ${call.estimated_revenue ? `
+                    <div class="info-item">
+                      <div class="info-label">
+                        <i class="fas fa-dollar-sign"></i>
+                        Est. Revenue
+                      </div>
+                      <div class="info-value">$${(call.estimated_revenue / 1000000).toFixed(0)}M</div>
+                    </div>
+                  ` : ''}
+                  ${call.actual_eps ? `
+                    <div class="info-item">
+                      <div class="info-label">
+                        <i class="fas fa-chart-line"></i>
+                        Actual EPS
+                      </div>
+                      <div class="info-value">$${call.actual_eps}</div>
+                    </div>
+                  ` : ''}
+                  ${call.actual_revenue ? `
+                    <div class="info-item">
+                      <div class="info-label">
+                        <i class="fas fa-money-bill-wave"></i>
+                        Actual Revenue
+                      </div>
+                      <div class="info-value">$${(call.actual_revenue / 1000000).toFixed(0)}M</div>
+                    </div>
+                  ` : ''}
                 </div>
               </div>
             `;
@@ -872,8 +1353,12 @@ WATCHLIST_HTML = """
         const countdownEl = document.getElementById(`countdown-${index}`);
         if (!countdownEl) return;
         
+        const iconEl = countdownEl.querySelector('i');
+        const textEl = countdownEl.querySelector('span');
+        
         if (diff <= 0) {
-          countdownEl.textContent = 'LIVE NOW';
+          iconEl.className = 'fas fa-broadcast-tower';
+          textEl.textContent = 'LIVE NOW';
           countdownEl.className = 'countdown urgent';
           return;
         }
@@ -888,15 +1373,18 @@ WATCHLIST_HTML = """
         if (days > 0) {
           countdownText = `${days}d ${hours}h ${minutes}m`;
           countdownEl.className = 'countdown normal';
+          iconEl.className = 'fas fa-calendar-day';
         } else if (hours > 0) {
           countdownText = `${hours}h ${minutes}m ${seconds}s`;
           countdownEl.className = 'countdown soon';
+          iconEl.className = 'fas fa-clock';
         } else {
           countdownText = `${minutes}m ${seconds}.${milliseconds.toString().padStart(2, '0')}s`;
           countdownEl.className = 'countdown urgent';
+          iconEl.className = 'fas fa-stopwatch';
         }
         
-        countdownEl.textContent = countdownText;
+        textEl.textContent = countdownText;
       });
     }
     
@@ -919,8 +1407,8 @@ WATCHLIST_HTML = """
         const modalCountdownEl = document.getElementById('modal-countdown');
         
         if (diff <= 0) {
-          modalCountdownEl.textContent = '🚨 EARNINGS CALL IS LIVE! 🚨';
-          modalCountdownEl.style.color = '#e74c3c';
+          modalCountdownEl.innerHTML = '🚨 EARNINGS CALL IS LIVE! 🚨';
+          modalCountdownEl.style.color = '#dc2626';
           return;
         }
         
@@ -941,11 +1429,11 @@ WATCHLIST_HTML = """
         
         // Color coding
         if (diff < 60000) { // Less than 1 minute
-          modalCountdownEl.style.color = '#e74c3c';
+          modalCountdownEl.style.color = '#dc2626';
         } else if (diff < 3600000) { // Less than 1 hour
-          modalCountdownEl.style.color = '#f39c12';
+          modalCountdownEl.style.color = '#d97706';
         } else {
-          modalCountdownEl.style.color = '#27ae60';
+          modalCountdownEl.style.color = '#667eea';
         }
       }, 10); // Update every 10ms for high precision
       
@@ -953,17 +1441,55 @@ WATCHLIST_HTML = """
       const modalInfo = document.getElementById('modal-info');
       modalInfo.innerHTML = `
         <div class="info-item">
-          <div class="info-label">Date & Time</div>
+          <div class="info-label">
+            <i class="fas fa-calendar-alt"></i>
+            Date & Time
+          </div>
           <div class="info-value">${new Date(call.call_time).toLocaleString()}</div>
         </div>
         <div class="info-item">
-          <div class="info-label">Status</div>
+          <div class="info-label">
+            <i class="fas fa-info-circle"></i>
+            Status
+          </div>
           <div class="info-value">${call.status}</div>
         </div>
-        ${call.estimated_eps ? `<div class="info-item"><div class="info-label">Estimated EPS</div><div class="info-value">$${call.estimated_eps}</div></div>` : ''}
-        ${call.estimated_revenue ? `<div class="info-item"><div class="info-label">Estimated Revenue</div><div class="info-value">$${(call.estimated_revenue / 1000000).toFixed(0)}M</div></div>` : ''}
-        ${call.actual_eps ? `<div class="info-item"><div class="info-label">Actual EPS</div><div class="info-value">$${call.actual_eps}</div></div>` : ''}
-        ${call.actual_revenue ? `<div class="info-item"><div class="info-label">Actual Revenue</div><div class="info-value">$${(call.actual_revenue / 1000000).toFixed(0)}M</div></div>` : ''}
+        ${call.estimated_eps ? `
+          <div class="info-item">
+            <div class="info-label">
+              <i class="fas fa-chart-bar"></i>
+              Estimated EPS
+            </div>
+            <div class="info-value">$${call.estimated_eps}</div>
+          </div>
+        ` : ''}
+        ${call.estimated_revenue ? `
+          <div class="info-item">
+            <div class="info-label">
+              <i class="fas fa-dollar-sign"></i>
+              Estimated Revenue
+            </div>
+            <div class="info-value">$${(call.estimated_revenue / 1000000).toFixed(0)}M</div>
+          </div>
+        ` : ''}
+        ${call.actual_eps ? `
+          <div class="info-item">
+            <div class="info-label">
+              <i class="fas fa-chart-line"></i>
+              Actual EPS
+            </div>
+            <div class="info-value">$${call.actual_eps}</div>
+          </div>
+        ` : ''}
+        ${call.actual_revenue ? `
+          <div class="info-item">
+            <div class="info-label">
+              <i class="fas fa-money-bill-wave"></i>
+              Actual Revenue
+            </div>
+            <div class="info-value">$${(call.actual_revenue / 1000000).toFixed(0)}M</div>
+          </div>
+        ` : ''}
       `;
     }
     
@@ -998,7 +1524,7 @@ WATCHLIST_HTML = """
           throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
         }
         
-        showMessage(`${ticker.toUpperCase()} removed from watchlist`);
+        showMessage(`${ticker.toUpperCase()} removed from watchlist`, 'success', 'fas fa-check-circle');
         loadWatchlist();
         
       } catch (error) {
@@ -1018,6 +1544,12 @@ WATCHLIST_HTML = """
         return;
       }
       
+      // Basic ticker validation (letters and numbers only, 1-5 characters)
+      if (!/^[A-Z0-9]{1,5}$/.test(ticker)) {
+        showMessage('Please enter a valid ticker symbol (1-5 letters/numbers)', 'error');
+        return;
+      }
+      
       try {
         const resp = await fetch('/watchlist', {
           method: 'POST',
@@ -1033,7 +1565,7 @@ WATCHLIST_HTML = """
           throw new Error(errorData.detail || `HTTP ${resp.status}: ${resp.statusText}`);
         }
         
-        showMessage(`${ticker} added to watchlist`);
+        showMessage(`${ticker} added to watchlist`, 'success', 'fas fa-plus-circle');
         tickerInput.value = '';
         loadWatchlist();
         

@@ -1,14 +1,10 @@
-apiVersion: skaffold/v4beta7
+apiVersion: skaffold/v4beta13
 kind: Config
 metadata:
   name: banshee
-
-# The rendered Cloud Run service manifest that Cloud Deploy stitches in
 manifests:
   rawYaml:
     - clouddeploy/service.yaml
-
-# Tell Skaffold "I'm deploying to Cloud Run, not GKE"
 deploy:
   cloudrun:
     region: us-central1
