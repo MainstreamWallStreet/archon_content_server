@@ -27,19 +27,60 @@ spec:
               memory: 4Gi                  # duplicate limits are fine
               cpu: "2"
           env:
+            # ───── Static environment variables ─────
+            - name: GOOGLE_CLOUD_PROJECT
+              value: "${PROJECT_ID}"
             - name: JOB_QUEUE_BUCKET
               value: "banshee-data"
             - name: BANSHEE_DATA_BUCKET
               value: "banshee-data"
-          volumeMounts:
-            - name: banshee-env
-              mountPath: /secrets          # `/secrets/.env` available at runtime
-              readOnly: true
-      volumes:
-        # ───── Secret-backed volume (env file) ─────
-        - name: banshee-env
-          secret:
-            secretName: banshee-env            # created via `gcloud secrets create`
-            items:
-              - key: latest                # always mount newest version
-                path: .env                 # filename inside the volume
+            - name: ENV
+              value: "production"
+            
+            # ───── API Keys from Secret Manager ─────
+            - name: API_NINJAS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-ninjas-key
+                  key: latest
+            - name: RAVEN_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: raven-api-key
+                  key: latest
+            - name: BANSHEE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: banshee-api-key
+                  key: latest
+            - name: SENDGRID_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sendgrid-api-key
+                  key: latest
+            
+            # ───── Google Service Account ─────
+            - name: GOOGLE_SA_VALUE
+              valueFrom:
+                secretKeyRef:
+                  name: banshee-google-sa-value
+                  key: latest
+            
+            # ───── Alert Configuration ─────
+            - name: ALERT_FROM_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: alert-from-email
+                  key: latest
+            - name: ALERT_RECIPIENTS
+              valueFrom:
+                secretKeyRef:
+                  name: alert-recipients
+                  key: latest
+            
+            # ───── Web Interface ─────
+            - name: BANSHEE_WEB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: banshee-web-password
+                  key: latest

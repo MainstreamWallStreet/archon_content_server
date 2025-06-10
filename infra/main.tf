@@ -152,6 +152,67 @@ resource "google_project_iam_member" "cloud_run_secret_accessor" {
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
 
+# API key secrets
+resource "google_secret_manager_secret" "api_ninjas_key" {
+  secret_id = "api-ninjas-key"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "api_ninjas_key" {
+  secret      = google_secret_manager_secret.api_ninjas_key.id
+  secret_data = var.api_ninjas_key
+}
+
+resource "google_secret_manager_secret" "raven_api_key" {
+  secret_id = "raven-api-key"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "raven_api_key" {
+  secret      = google_secret_manager_secret.raven_api_key.id
+  secret_data = var.raven_api_key
+}
+
+resource "google_secret_manager_secret" "banshee_api_key" {
+  secret_id = "banshee-api-key"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "banshee_api_key" {
+  secret      = google_secret_manager_secret.banshee_api_key.id
+  secret_data = var.banshee_api_key
+}
+
+resource "google_secret_manager_secret" "sendgrid_api_key" {
+  secret_id = "sendgrid-api-key"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "sendgrid_api_key" {
+  secret      = google_secret_manager_secret.sendgrid_api_key.id
+  secret_data = var.sendgrid_api_key
+}
+
+resource "google_secret_manager_secret" "google_sa_value" {
+  secret_id = "banshee-google-sa-value"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "google_sa_value" {
+  secret      = google_secret_manager_secret.google_sa_value.id
+  secret_data = var.google_sa_value
+}
+
 resource "google_secret_manager_secret" "alert_from_email" {
   secret_id = "alert-from-email"
   replication {
