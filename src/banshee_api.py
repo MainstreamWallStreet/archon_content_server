@@ -873,6 +873,7 @@ WATCHLIST_HTML = """
       margin-bottom: 2rem;
       padding-bottom: 1.5rem;
       border-bottom: 2px solid rgba(102, 126, 234, 0.1);
+      position: relative;
     }
     .logo {
       display: inline-flex;
@@ -903,6 +904,167 @@ WATCHLIST_HTML = """
       color: #6b7280;
       font-size: 1rem;
       font-weight: 400;
+    }
+    .header-controls {
+      position: absolute;
+      top: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .progress-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      z-index: 1001;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .progress-container.active {
+      opacity: 1;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2, #10b981);
+      background-size: 300% 100%;
+      width: 0%;
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      animation: shimmer 2s ease-in-out infinite;
+      border-radius: 0 2px 2px 0;
+      box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+    }
+    @keyframes shimmer {
+      0% { background-position: 300% 0; }
+      100% { background-position: -300% 0; }
+    }
+    .refresh-btn {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      border: none;
+      padding: 0.875rem 1.25rem;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+    .refresh-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+    }
+    .refresh-btn:active {
+      transform: translateY(0);
+    }
+    .refresh-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .refresh-btn.loading {
+      background: linear-gradient(135deg, #6b7280, #4b5563);
+      box-shadow: 0 4px 15px rgba(107, 114, 128, 0.3);
+    }
+    .refresh-btn.loading i {
+      animation: spin 1s linear infinite;
+    }
+    .refresh-btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transition: left 0.5s ease;
+    }
+    .refresh-btn:hover::before {
+      left: 100%;
+    }
+    .step-indicator {
+      position: fixed;
+      top: 50px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      padding: 1rem;
+      border-radius: 12px;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      z-index: 1000;
+      opacity: 0;
+      transform: translateX(100%);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      min-width: 250px;
+    }
+    .step-indicator.active {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .step-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      transition: all 0.3s ease;
+    }
+    .step-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      transition: all 0.3s ease;
+    }
+    .step-icon.pending {
+      background: #e5e7eb;
+      color: #9ca3af;
+    }
+    .step-icon.active {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .step-icon.completed {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+    }
+    .step-text {
+      flex: 1;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: color 0.3s ease;
+    }
+    .step-item.pending .step-text {
+      color: #9ca3af;
+    }
+    .step-item.active .step-text {
+      color: #667eea;
+      font-weight: 600;
+    }
+    .step-item.completed .step-text {
+      color: #10b981;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
     }
     .nav-tabs {
       display: flex;
@@ -964,36 +1126,6 @@ WATCHLIST_HTML = """
       display: flex;
       align-items: center;
       gap: 0.5rem;
-    }
-    .refresh-btn {
-      background: linear-gradient(135deg, #10b981, #059669);
-      color: white;
-      border: none;
-      padding: 0.75rem 1rem;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 0.875rem;
-      font-weight: 600;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-    }
-    .refresh-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
-    }
-    .refresh-btn:active {
-      transform: translateY(0);
-    }
-    .refresh-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      transform: none;
-    }
-    .refresh-btn.loading i {
-      animation: spin 1s linear infinite;
     }
     .add-form {
       background: rgba(248, 250, 252, 0.8);
@@ -1352,6 +1484,40 @@ WATCHLIST_HTML = """
     
     /* Mobile-specific styles */
     @media (max-width: 768px) {
+      .header-controls {
+        position: relative;
+        top: auto;
+        right: auto;
+        justify-content: center;
+        margin-top: 1rem;
+      }
+      
+      .refresh-btn {
+        padding: 0.75rem 1rem;
+        font-size: 0.875rem;
+      }
+      
+      .step-indicator {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        transform: translateY(-100%);
+        min-width: auto;
+        max-width: none;
+      }
+      
+      .step-indicator.active {
+        transform: translateY(0);
+      }
+      
+      .step-item {
+        padding: 0.375rem 0;
+      }
+      
+      .step-text {
+        font-size: 0.8125rem;
+      }
+      
       .desktop-delete {
         display: none;
       }
@@ -1421,8 +1587,45 @@ WATCHLIST_HTML = """
   <meta name="twitter:card" content="summary_large_image">
 </head>
 <body>
+  <!-- Progress bar at the top -->
+  <div id="progress-container" class="progress-container">
+    <div id="progress-bar" class="progress-bar"></div>
+  </div>
+  
+  <!-- Step indicator -->
+  <div id="step-indicator" class="step-indicator">
+    <ul id="step-list" class="step-list">
+      <li class="step-item pending" id="step-1">
+        <div class="step-icon">1</div>
+        <div class="step-text">Preparing sync...</div>
+      </li>
+      <li class="step-item pending" id="step-2">
+        <div class="step-icon">2</div>
+        <div class="step-text">Fetching data...</div>
+      </li>
+      <li class="step-item pending" id="step-3">
+        <div class="step-icon">3</div>
+        <div class="step-text">Cleaning stale data...</div>
+      </li>
+      <li class="step-item pending" id="step-4">
+        <div class="step-icon">4</div>
+        <div class="step-text">Updating storage...</div>
+      </li>
+      <li class="step-item pending" id="step-5">
+        <div class="step-icon">5</div>
+        <div class="step-text">Refreshing display...</div>
+      </li>
+    </ul>
+  </div>
+
   <div class="container">
     <div class="header">
+      <div class="header-controls">
+        <button id="refresh-earnings-btn" class="refresh-btn" onclick="refreshUpcomingEarnings()">
+          <i class="fas fa-sync-alt"></i>
+          <span>Refresh Data</span>
+        </button>
+      </div>
       <div class="logo">
         <i class="fas fa-chart-line"></i>
       </div>
@@ -1485,10 +1688,6 @@ WATCHLIST_HTML = """
           <i class="fas fa-clock"></i>
           <span id="earnings-count">Loading upcoming earnings...</span>
         </div>
-        <button id="refresh-earnings-btn" class="refresh-btn" onclick="refreshUpcomingEarnings()">
-          <i class="fas fa-sync-alt"></i>
-          <span>Refresh</span>
-        </button>
       </div>
       
       <div id="earnings-loading" class="loading">
@@ -2288,6 +2487,86 @@ WATCHLIST_HTML = """
     // Load upcoming earnings immediately (public endpoint)
     loadUpcomingEarningsPublic();
     
+    // Progress and step management
+    let currentStep = 0;
+    const totalSteps = 5;
+    
+    function showProgress() {
+      const progressContainer = document.getElementById('progress-container');
+      const stepIndicator = document.getElementById('step-indicator');
+      
+      progressContainer.classList.add('active');
+      stepIndicator.classList.add('active');
+      
+      // Reset all steps
+      for (let i = 1; i <= totalSteps; i++) {
+        const step = document.getElementById(`step-${i}`);
+        step.className = 'step-item pending';
+        const icon = step.querySelector('.step-icon');
+        icon.textContent = i;
+      }
+      currentStep = 0;
+      updateProgressBar(0);
+    }
+    
+    function hideProgress() {
+      const progressContainer = document.getElementById('progress-container');
+      const stepIndicator = document.getElementById('step-indicator');
+      
+      setTimeout(() => {
+        progressContainer.classList.remove('active');
+        stepIndicator.classList.remove('active');
+      }, 500);
+    }
+    
+    function updateProgressBar(percentage) {
+      const progressBar = document.getElementById('progress-bar');
+      progressBar.style.width = `${percentage}%`;
+    }
+    
+    function setStepActive(stepNumber, text = null) {
+      if (currentStep > 0) {
+        // Mark previous step as completed
+        const prevStep = document.getElementById(`step-${currentStep}`);
+        prevStep.className = 'step-item completed';
+        const prevIcon = prevStep.querySelector('.step-icon');
+        prevIcon.innerHTML = '<i class="fas fa-check"></i>';
+      }
+      
+      currentStep = stepNumber;
+      const step = document.getElementById(`step-${stepNumber}`);
+      step.className = 'step-item active';
+      
+      if (text) {
+        const stepText = step.querySelector('.step-text');
+        stepText.textContent = text;
+      }
+      
+      // Update progress bar smoothly
+      const percentage = ((stepNumber - 1) / totalSteps) * 100 + (100 / totalSteps) * 0.5;
+      updateProgressBar(percentage);
+    }
+    
+    function completeStep(stepNumber, text = null) {
+      const step = document.getElementById(`step-${stepNumber}`);
+      step.className = 'step-item completed';
+      const icon = step.querySelector('.step-icon');
+      icon.innerHTML = '<i class="fas fa-check"></i>';
+      
+      if (text) {
+        const stepText = step.querySelector('.step-text');
+        stepText.textContent = text;
+      }
+      
+      // Update progress bar to full for this step
+      const percentage = (stepNumber / totalSteps) * 100;
+      updateProgressBar(percentage);
+    }
+    
+    async function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
     async function refreshUpcomingEarnings() {
       const refreshBtn = document.getElementById('refresh-earnings-btn');
       const btnIcon = refreshBtn.querySelector('i');
@@ -2299,7 +2578,18 @@ WATCHLIST_HTML = """
         refreshBtn.classList.add('loading');
         btnText.textContent = 'Refreshing...';
         
-        showMessage('Refreshing upcoming earnings data...', 'success', 'fas fa-sync-alt');
+        // Show progress tracking
+        showProgress();
+        
+        // Step 1: Preparing sync
+        setStepActive(1, 'Initializing refresh process...');
+        await delay(300);
+        
+        showMessage('Starting comprehensive data refresh...', 'success', 'fas fa-sync-alt');
+        
+        // Step 2: Fetching data
+        setStepActive(2, 'Fetching latest earnings data...');
+        await delay(200);
         
         // Call the refresh endpoint (requires authentication)
         const resp = await fetch('/tasks/upcoming-sync', {
@@ -2307,26 +2597,77 @@ WATCHLIST_HTML = """
           headers: {'X-API-Key': apiKey}
         });
         
+        await delay(400); // Simulate processing time for smooth UX
+        
         if (!resp.ok) {
           throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
         }
         
+        completeStep(2, 'Data fetched successfully');
+        
+        // Step 3: Cleaning stale data
+        setStepActive(3, 'Cleaning up stale data...');
+        await delay(300);
+        
         const result = await resp.json();
-        // Show the detailed message from the backend
-        const message = result.message || 'Upcoming earnings data refreshed successfully!';
-        showMessage(message, 'success', 'fas fa-check-circle');
+        
+        completeStep(3, 'Cleanup completed');
+        
+        // Step 4: Updating storage
+        setStepActive(4, 'Updating data storage...');
+        await delay(250);
+        
+        completeStep(4, 'Storage updated');
+        
+        // Step 5: Refreshing display
+        setStepActive(5, 'Refreshing dashboard...');
+        await delay(200);
         
         // Reload the earnings data (use authenticated endpoint after refresh)
         loadUpcomingEarnings();
         
+        // Also refresh watchlist in case tickers were added/removed
+        if (apiKey) {
+          loadWatchlist();
+        } else {
+          loadWatchlistPublic();
+        }
+        
+        await delay(300);
+        
+        completeStep(5, 'Dashboard refreshed');
+        
+        // Show the detailed message from the backend
+        const message = result.message || 'Data refresh completed successfully!';
+        showMessage(message, 'success', 'fas fa-check-circle');
+        
+        // Complete progress bar
+        updateProgressBar(100);
+        await delay(500);
+        
       } catch (error) {
         console.error('Error refreshing earnings:', error);
-        showMessage(`Error refreshing earnings: ${error.message}`, 'error');
+        showMessage(`Error refreshing data: ${error.message}`, 'error');
+        
+        // Mark current step as failed
+        if (currentStep > 0) {
+          const step = document.getElementById(`step-${currentStep}`);
+          step.className = 'step-item pending';
+          const icon = step.querySelector('.step-icon');
+          icon.innerHTML = '<i class="fas fa-times"></i>';
+          icon.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+          const stepText = step.querySelector('.step-text');
+          stepText.textContent = 'Failed - ' + error.message;
+          stepText.style.color = '#ef4444';
+        }
       } finally {
         // Restore button state
         refreshBtn.disabled = false;
         refreshBtn.classList.remove('loading');
-        btnText.textContent = 'Refresh';
+        btnText.textContent = 'Refresh Data';
+        
+        // Hide progress after a delay
+        setTimeout(hideProgress, 1500);
       }
     }
   </script>
