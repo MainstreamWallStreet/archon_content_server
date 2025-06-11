@@ -43,6 +43,8 @@ os.environ.setdefault("API_NINJAS_KEY", "dummy")
 os.environ.setdefault("GOOGLE_DRIVE_ROOT_FOLDER_ID", "dummy")
 os.environ.setdefault("JOB_QUEUE_BUCKET", "test-bucket")
 os.environ["BANSHEE_DATA_BUCKET"] = "test-bucket"
+os.environ.setdefault("EARNINGS_BUCKET", "calls-b")
+os.environ.setdefault("EMAIL_QUEUE_BUCKET", "email-b")
 os.environ["BANSHEE_API_KEY"] = "test"
 os.environ.setdefault("STORAGE_EMULATOR_HOST", "http://localhost:4443")
 os.environ.setdefault("QUARTERLY_FILING_DATA_VERSION", "1")

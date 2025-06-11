@@ -152,6 +152,15 @@ resource "google_project_iam_member" "cloud_run_secret_accessor" {
   member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
 
+# Allow public access to Cloud Run service
+resource "google_cloud_run_service_iam_member" "public_access" {
+  location = var.region
+  project  = var.project
+  service  = "banshee-api"
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}
+
 # API key secrets
 resource "google_secret_manager_secret" "api_ninjas_key" {
   secret_id = "api-ninjas-key"
@@ -235,7 +244,7 @@ resource "google_secret_manager_secret" "web_password" {
 
 resource "google_secret_manager_secret_version" "web_password" {
   secret      = google_secret_manager_secret.web_password.id
-  secret_data = var.web_password
+  secret_data = var.banshee_web_password
 }
 
 # Alert recipients secret
@@ -270,3 +279,29 @@ resource "google_storage_bucket_iam_member" "banshee_data_writer" {
   role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
 }
+
+# Bucket for upcoming earnings data
+resource "google_storage_bucket" "earnings_bucket" {
+  name     = var.earnings_bucket
+  location = var.region
+  uniform_bucket_level_access = true
+}
+
+resource "google_storage_bucket_iam_member" "earnings_writer" {
+  bucket = google_storage_bucket.earnings_bucket.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+}
+
+# Bucket for queued emails
+resource "google_storage_bucket" "email_queue" {
+  name     = var.email_queue_bucket
+  location = var.region
+  uniform_bucket_level_access = true
+}
+
+resource "google_storage_bucket_iam_member" "email_queue_writer" {
+  bucket = google_storage_bucket.email_queue.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+} 
