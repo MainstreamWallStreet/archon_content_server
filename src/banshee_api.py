@@ -128,10 +128,11 @@ def read_watchlist(_: str = Depends(validate_key)) -> dict[str, List[str]]:
     return {"tickers": store.list_tickers()}
 
 
-@app.get("/public/watchlist")
-def read_watchlist_public() -> dict[str, List[str]]:
-    """Get the current watchlist - public endpoint."""
-    return {"tickers": store.list_tickers()}
+# Removed public watchlist endpoint to ensure all UI accesses are authenticated
+# @app.get("/public/watchlist")
+# def read_watchlist_public() -> dict[str, List[str]]:
+#     """Get the current watchlist - public endpoint (deprecated)."""
+#     return {"tickers": store.list_tickers()}
 
 
 @app.post("/watchlist")
@@ -324,71 +325,11 @@ async def get_upcoming_earnings(
         return UpcomingCallsResponse(calls=[], total_count=0, next_call=None)
 
 
-@app.get("/public/earnings/upcoming")
-async def get_upcoming_earnings_public() -> UpcomingCallsResponse:
-    """Get upcoming earnings calls from GCS storage - public endpoint."""
-    logger = logging.getLogger(__name__)
-    logger.info("Fetching upcoming earnings from GCS storage (public endpoint)")
-
-    calls = []
-    now = datetime.now(timezone.utc)
-
-    try:
-        # Get all saved calls from GCS
-        all_items = calls_bucket.list_json("calls/")
-        logger.info("Found %d total items in GCS calls bucket", len(all_items))
-
-        for path, call_data in all_items:
-            try:
-                logger.info("Processing GCS item: %s -> %s", path, call_data)
-
-                # Parse the call time
-                call_time_str = call_data["call_time"]
-                call_time = datetime.fromisoformat(call_time_str)
-
-                # Only include future calls
-                if call_time <= now:
-                    logger.info(
-                        "Skipping past call: %s at %s",
-                        call_data["ticker"],
-                        call_time_str,
-                    )
-                    continue
-
-                # Create EarningsCall object
-                call = EarningsCall(
-                    ticker=call_data["ticker"],
-                    call_date=call_data["call_date"],
-                    call_time=call_time_str,
-                    status="scheduled",
-                    actual_eps=None,
-                    estimated_eps=None,
-                    actual_revenue=None,
-                    estimated_revenue=None,
-                )
-                calls.append(call)
-                logger.info(
-                    "Added upcoming call: %s on %s", call.ticker, call.call_date
-                )
-
-            except Exception as e:
-                logger.error("Error processing GCS item %s: %s", path, str(e))
-                continue
-
-        # Sort by call time
-        calls.sort(key=lambda x: x.call_time)
-
-        next_call = calls[0] if calls else None
-
-        logger.info("Returning %d upcoming calls", len(calls))
-        return UpcomingCallsResponse(
-            calls=calls, total_count=len(calls), next_call=next_call
-        )
-
-    except Exception as e:
-        logger.error("Error fetching upcoming earnings from GCS: %s", str(e))
-        # Return empty response if there's an error
-        return UpcomingCallsResponse(calls=[], total_count=0, next_call=None)
+# Removed public earnings upcoming endpoint to enforce authentication
+# @app.get("/public/earnings/upcoming")
+# async def get_upcoming_earnings_public() -> UpcomingCallsResponse:
+#     """Deprecated public endpoint for upcoming earnings."""
+#     return await get_upcoming_earnings(validate_key())
 
 
 @app.get("/earnings/{ticker}")
@@ -705,37 +646,7 @@ def watchlist_page(request: Request):
     session_id = request.cookies.get("banshee_session")
     if session_id not in authenticated_sessions:
         login_html = templates.get_template("login.html").render(error="")
-        preload_script = """
-<script>
-// Load upcoming earnings and watchlist data immediately on the login page
-async function loadLoginPageData() {
-  try {
-    // Load earnings data
-    const earningsResp = await fetch('/public/earnings/upcoming');
-    if (earningsResp.ok) {
-      const earningsData = await earningsResp.json();
-      if (earningsData.calls && earningsData.calls.length > 0) {
-        localStorage.setItem('cached_earnings', JSON.stringify(earningsData));
-      }
-    }
-
-    // Load watchlist data
-    const watchlistResp = await fetch('/public/watchlist');
-    if (watchlistResp.ok) {
-      const watchlistData = await watchlistResp.json();
-      if (watchlistData.tickers && watchlistData.tickers.length > 0) {
-        localStorage.setItem('cached_watchlist', JSON.stringify(watchlistData));
-      }
-    }
-  } catch (error) {
-    console.log('Could not preload data:', error);
-  }
-}
-
-loadLoginPageData();
-</script>
-"""
-        return HTMLResponse(content=login_html + preload_script)
+        return HTMLResponse(content=login_html)
 
     api_key = get_setting("BANSHEE_API_KEY")
     return templates.TemplateResponse(

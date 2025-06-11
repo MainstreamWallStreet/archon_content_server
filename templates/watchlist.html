@@ -901,12 +901,7 @@
       document.getElementById(tabName + '-tab').classList.add('active');
       
       if (tabName === 'upcoming') {
-        // Try to use authenticated endpoint, fall back to public
-        if (apiKey) {
-          loadUpcomingEarnings();
-        } else {
-          loadUpcomingEarningsPublic();
-        }
+        loadUpcomingEarnings();
       }
     }
     
@@ -986,7 +981,9 @@
         listEl.style.display = 'none';
         
         // Use public endpoint that doesn't require authentication
-        const resp = await fetch('/public/watchlist');
+        const resp = await fetch('/watchlist', {
+          headers: {'X-API-Key': apiKey}
+        });
         
         if (!resp.ok) {
           throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
@@ -1210,7 +1207,9 @@
         listEl.style.display = 'none';
         
         // Use public endpoint that doesn't require authentication
-        const resp = await fetch('/public/earnings/upcoming');
+        const resp = await fetch('/earnings/upcoming', {
+          headers: {'X-API-Key': apiKey}
+        });
         
         if (!resp.ok) {
           throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
@@ -1651,11 +1650,9 @@
       }
     });
     
-    // Load watchlist on page load
-    loadWatchlistPublic();
-    
-    // Load upcoming earnings immediately (public endpoint)
-    loadUpcomingEarningsPublic();
+    // Load watchlist and upcoming earnings on page load
+    loadWatchlist();
+    loadUpcomingEarnings();
     
     // Progress and step management
     let currentStep = 0;
@@ -1760,8 +1757,8 @@
         // Get current watchlist to show which companies are being processed
         let watchlistTickers = [];
         try {
-          const watchlistResp = await fetch(apiKey ? '/watchlist' : '/public/watchlist', {
-            headers: apiKey ? {'X-API-Key': apiKey} : {}
+          const watchlistResp = await fetch('/watchlist', {
+            headers: {'X-API-Key': apiKey}
           });
           if (watchlistResp.ok) {
             const watchlistData = await watchlistResp.json();
@@ -1817,11 +1814,7 @@
         loadUpcomingEarnings();
         
         // Also refresh watchlist in case tickers were added/removed
-        if (apiKey) {
-          loadWatchlist();
-        } else {
-          loadWatchlistPublic();
-        }
+        loadWatchlist();
         
         await delay(300);
         
