@@ -120,7 +120,7 @@ async def refresh_upcoming_calls(
             
             # Try multiple possible date field names as fallback
             date_field = None
-            possible_date_fields = ['earnings_date', 'date', 'announcement_date', 'report_date', 'call_date', 'earnings_call_date']
+            possible_date_fields = ['date', 'earnings_date', 'announcement_date', 'report_date', 'call_date', 'earnings_call_date']
             
             for field_name in possible_date_fields:
                 if field_name in item and item[field_name]:
@@ -140,9 +140,9 @@ async def refresh_upcoming_calls(
                 
                 # Handle different date formats
                 if len(earnings_date_raw) == 10:  # Date only like "2026-04-13"
-                    # Assume market close time (4 PM ET = 9 PM UTC for standard time)
-                    call_time = datetime.fromisoformat(f"{earnings_date_raw}T21:00:00+00:00")
-                    logger.info("Parsed date-only string for %s: %s -> %s", ticker, earnings_date_raw, call_time.isoformat())
+                    # Assume before market opens (8 AM EST = 1 PM UTC)
+                    call_time = datetime.fromisoformat(f"{earnings_date_raw}T13:00:00+00:00")
+                    logger.info("Parsed date-only string for %s: %s -> %s (8 AM EST)", ticker, earnings_date_raw, call_time.isoformat())
                 elif earnings_date_raw.endswith('Z'):
                     # ISO format with Z timezone
                     call_time = datetime.fromisoformat(earnings_date_raw.replace("Z", "+00:00"))

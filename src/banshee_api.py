@@ -256,15 +256,18 @@ async def _fetch_api_ninjas_upcoming(ticker: str) -> list[dict]:
     """Fetch upcoming earnings calls from API Ninjas with fallback strategies."""
     logger = logging.getLogger(__name__)
     
-    # Try multiple API approaches as fallbacks
+    # Primary approach: use show_upcoming=true as documented
+    # Fallback: get historical data and filter for future dates
     api_attempts = [
         {
             "url": f"https://api.api-ninjas.com/v1/earningscalendar?ticker={ticker}&show_upcoming=true",
-            "name": "upcoming_earnings_with_flag"
+            "name": "upcoming_only",
+            "expected_field": "date"  # Official API docs show 'date' field
         },
         {
             "url": f"https://api.api-ninjas.com/v1/earningscalendar?ticker={ticker}",
-            "name": "all_earnings_data"
+            "name": "historical_data",
+            "expected_field": "date"
         }
     ]
     
@@ -297,10 +300,10 @@ async def _fetch_api_ninjas_upcoming(ticker: str) -> list[dict]:
                     
                     # Check if this result has usable data
                     if result and isinstance(result, list) and len(result) > 0:
-                        # Check if any items have date fields we can use
-                        usable_items = 0
-                        date_fields = ['earnings_date', 'date', 'announcement_date', 'report_date', 'call_date', 'earnings_call_date']
+                        # Prioritize 'date' field as documented, with fallbacks
+                        date_fields = ['date', 'earnings_date', 'announcement_date', 'report_date', 'call_date', 'earnings_call_date']
                         
+                        usable_items = 0
                         for item in result:
                             if any(field in item and item[field] for field in date_fields):
                                 usable_items += 1
@@ -1441,7 +1444,18 @@ WATCHLIST_HTML = """
         } else {
           calls.forEach((call, index) => {
             const callTime = new Date(call.call_time);
-            const timeString = callTime.toLocaleString();
+            // Convert to EST for display
+            const estOffset = -5; // EST is UTC-5
+            const callTimeEST = new Date(callTime.getTime() + (estOffset * 60 * 60 * 1000));
+            const timeString = callTimeEST.toLocaleString('en-US', {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              timeZone: 'America/New_York'
+            }) + ' EST';
             
             const li = document.createElement('li');
             li.className = 'card earnings-item';
@@ -1526,11 +1540,15 @@ WATCHLIST_HTML = """
     function updateCountdowns() {
       if (!currentEarningsData) return;
       
+      // Get current time in EST
       const now = new Date();
+      const estOffset = -5; // EST is UTC-5 (ignoring DST for simplicity)
+      const nowEST = new Date(now.getTime() + (estOffset * 60 * 60 * 1000));
       
       currentEarningsData.forEach((call, index) => {
+        // Convert call time to EST
         const callTime = new Date(call.call_time);
-        const diff = callTime - now;
+        const callTimeEST = new Date(callTime.getTime() + (estOffset * 60 * 60 * 1000));
         
         const countdownEl = document.getElementById(`countdown-${index}`);
         if (!countdownEl) return;
@@ -1538,34 +1556,68 @@ WATCHLIST_HTML = """
         const iconEl = countdownEl.querySelector('i');
         const textEl = countdownEl.querySelector('span');
         
-        if (diff <= 0) {
+        // Check if the call is live or past
+        if (callTimeEST <= nowEST) {
           iconEl.className = 'fas fa-broadcast-tower';
           textEl.textContent = 'LIVE NOW';
           countdownEl.className = 'countdown urgent';
           return;
         }
         
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        const milliseconds = Math.floor((diff % 1000) / 10); // Show centiseconds
+        // Calculate time difference
+        const diffMs = callTimeEST - nowEST;
+        
+        // Calculate months, days, hours, minutes, seconds
+        const msPerSecond = 1000;
+        const msPerMinute = msPerSecond * 60;
+        const msPerHour = msPerMinute * 60;
+        const msPerDay = msPerHour * 24;
+        const msPerMonth = msPerDay * 30.44; // Average days per month
+        
+        const months = Math.floor(diffMs / msPerMonth);
+        const days = Math.floor((diffMs % msPerMonth) / msPerDay);
+        const hours = Math.floor((diffMs % msPerDay) / msPerHour);
+        const minutes = Math.floor((diffMs % msPerHour) / msPerMinute);
+        const seconds = Math.floor((diffMs % msPerMinute) / msPerSecond);
         
         let countdownText = '';
-        if (days > 0) {
-          countdownText = `${days}d ${hours}h ${minutes}m`;
-          countdownEl.className = 'countdown normal';
-          iconEl.className = 'fas fa-calendar-day';
+        let className = 'countdown normal';
+        let iconClass = 'fas fa-calendar-day';
+        
+        if (months > 0) {
+          if (days > 0) {
+            countdownText = `${months}mo ${days}d`;
+          } else {
+            countdownText = `${months} month${months > 1 ? 's' : ''}`;
+          }
+          className = 'countdown normal';
+          iconClass = 'fas fa-calendar-alt';
+        } else if (days > 7) {
+          const weeks = Math.floor(days / 7);
+          const remainingDays = days % 7;
+          if (remainingDays > 0) {
+            countdownText = `${weeks}w ${remainingDays}d`;
+          } else {
+            countdownText = `${weeks} week${weeks > 1 ? 's' : ''}`;
+          }
+          className = 'countdown normal';
+          iconClass = 'fas fa-calendar-week';
+        } else if (days > 0) {
+          countdownText = `${days}d ${hours}h`;
+          className = 'countdown soon';
+          iconClass = 'fas fa-calendar-day';
         } else if (hours > 0) {
-          countdownText = `${hours}h ${minutes}m ${seconds}s`;
-          countdownEl.className = 'countdown soon';
-          iconEl.className = 'fas fa-clock';
+          countdownText = `${hours}h ${minutes}m`;
+          className = 'countdown urgent';
+          iconClass = 'fas fa-clock';
         } else {
-          countdownText = `${minutes}m ${seconds}.${milliseconds.toString().padStart(2, '0')}s`;
-          countdownEl.className = 'countdown urgent';
-          iconEl.className = 'fas fa-stopwatch';
+          countdownText = `${minutes}m ${seconds}s`;
+          className = 'countdown urgent';
+          iconClass = 'fas fa-stopwatch';
         }
         
+        countdownEl.className = className;
+        iconEl.className = iconClass;
         textEl.textContent = countdownText;
       });
     }
@@ -1582,26 +1634,44 @@ WATCHLIST_HTML = """
       // Start modal countdown
       if (countdownInterval) clearInterval(countdownInterval);
       countdownInterval = setInterval(() => {
+        // Get current time in EST
         const now = new Date();
+        const estOffset = -5; // EST is UTC-5 (ignoring DST for simplicity)
+        const nowEST = new Date(now.getTime() + (estOffset * 60 * 60 * 1000));
+        
+        // Convert call time to EST
         const callTime = new Date(call.call_time);
-        const diff = callTime - now;
+        const callTimeEST = new Date(callTime.getTime() + (estOffset * 60 * 60 * 1000));
+        
+        const diffMs = callTimeEST - nowEST;
         
         const modalCountdownEl = document.getElementById('modal-countdown');
         
-        if (diff <= 0) {
+        if (diffMs <= 0) {
           modalCountdownEl.innerHTML = '🚨 EARNINGS CALL IS LIVE! 🚨';
           modalCountdownEl.style.color = '#dc2626';
           return;
         }
         
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        const milliseconds = diff % 1000;
+        // Calculate time components
+        const msPerSecond = 1000;
+        const msPerMinute = msPerSecond * 60;
+        const msPerHour = msPerMinute * 60;
+        const msPerDay = msPerHour * 24;
+        const msPerMonth = msPerDay * 30.44; // Average days per month
+        
+        const months = Math.floor(diffMs / msPerMonth);
+        const days = Math.floor((diffMs % msPerMonth) / msPerDay);
+        const hours = Math.floor((diffMs % msPerDay) / msPerHour);
+        const minutes = Math.floor((diffMs % msPerHour) / msPerMinute);
+        const seconds = Math.floor((diffMs % msPerMinute) / msPerSecond);
+        const milliseconds = diffMs % 1000;
         
         let countdownText = '';
-        if (days > 0) {
+        
+        if (months > 0) {
+          countdownText = `${months}mo ${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        } else if (days > 0) {
           countdownText = `${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
         } else {
           countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
@@ -1609,11 +1679,13 @@ WATCHLIST_HTML = """
         
         modalCountdownEl.textContent = countdownText;
         
-        // Color coding
-        if (diff < 60000) { // Less than 1 minute
+        // Color coding based on time remaining
+        if (diffMs < 60000) { // Less than 1 minute
           modalCountdownEl.style.color = '#dc2626';
-        } else if (diff < 3600000) { // Less than 1 hour
+        } else if (diffMs < 3600000) { // Less than 1 hour
           modalCountdownEl.style.color = '#d97706';
+        } else if (diffMs < 86400000) { // Less than 1 day
+          modalCountdownEl.style.color = '#059669';
         } else {
           modalCountdownEl.style.color = '#667eea';
         }
@@ -1621,13 +1693,28 @@ WATCHLIST_HTML = """
       
       // Populate modal info
       const modalInfo = document.getElementById('modal-info');
+      
+      // Convert call time to EST for display
+      const callTime = new Date(call.call_time);
+      const estOffset = -5; // EST is UTC-5
+      const callTimeEST = new Date(callTime.getTime() + (estOffset * 60 * 60 * 1000));
+      const callTimeESTString = callTimeEST.toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'America/New_York'
+      }) + ' EST';
+      
       modalInfo.innerHTML = `
         <div class="info-item">
           <div class="info-label">
             <i class="fas fa-calendar-alt"></i>
-            Date & Time
+            Date & Time (EST)
           </div>
-          <div class="info-value">${new Date(call.call_time).toLocaleString()}</div>
+          <div class="info-value">${callTimeESTString}</div>
         </div>
         <div class="info-item">
           <div class="info-label">

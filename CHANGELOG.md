@@ -1,6 +1,20 @@
 # Changelog
 <!-- ruff: noqa -->
 
+## [2025-01-10] - API Ninjas Integration Optimization
+### Changed
+- **Optimized API Field Handling**: Updated earnings API integration to align with official API Ninjas documentation:
+  - Now prioritizes the official `date` field as documented in API Ninjas earnings calendar API
+  - Improved field priority order: `date`, `earnings_date`, `announcement_date`, `report_date`, `call_date`, `earnings_call_date`
+  - Enhanced API call strategy prioritizing `show_upcoming=true` as the primary method
+- **Better API Documentation Compliance**: API calls now follow the official API Ninjas structure and response format
+- **Improved Data Structure Validation**: More robust handling of API response fields according to official documentation
+
+### Technical Notes
+- The underlying data quality limitations of API Ninjas (outdated/stale earnings schedules) persist
+- API correctly returns `date` field with proper structure but contains far-future dates (2025-2027) instead of near-term earnings
+- Implementation now properly follows official API Ninjas documentation for maximum compatibility
+
 ## [2025-01-10] - Earnings Monitoring System Overhaul
 ### Added
 - **Refresh Button for Upcoming Earnings**: Added a refresh button to the web UI's "Upcoming Calls" tab that manually triggers data refresh
