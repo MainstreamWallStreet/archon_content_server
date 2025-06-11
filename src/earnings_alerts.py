@@ -241,6 +241,13 @@ def cleanup_email_queue(email_bucket: GcsBucket, tickers: set[str]) -> None:
             email_bucket.delete(path)
 
 
+def cleanup_calls_queue(calls_bucket: GcsBucket, tickers: set[str]) -> None:
+    """Remove scheduled calls for tickers no longer tracked."""
+    for path, data in calls_bucket.list_json("calls/"):
+        if data.get("ticker") not in tickers:
+            calls_bucket.delete(path)
+
+
 def _render(kind: str, ticker: str, call_time: datetime) -> tuple[str, str]:
     dt_str = call_time.strftime("%Y-%m-%d %H:%M UTC")
     if kind == "one_week":

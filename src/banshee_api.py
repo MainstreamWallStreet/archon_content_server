@@ -21,6 +21,7 @@ from src.earnings_alerts import (
     GcsBucket,
     refresh_upcoming_calls,
     cleanup_email_queue,
+    cleanup_calls_queue,
     send_due_emails,
 )
 
@@ -135,15 +136,88 @@ async def create_watchlist(
 ) -> dict[str, str]:
     store.add_ticker(payload.ticker, payload.user)
     await refresh_upcoming_calls(store, calls_bucket, email_bucket)
+    cleanup_calls_queue(calls_bucket, set(store.list_tickers()))
     cleanup_email_queue(email_bucket, set(store.list_tickers()))
     return {"message": "added"}
 
 
 @app.delete("/watchlist/{ticker}")
-def delete_watchlist(ticker: str, _: str = Depends(validate_key)) -> dict[str, str]:
-    store.remove_ticker(ticker)
-    cleanup_email_queue(email_bucket, set(store.list_tickers()))
-    return {"message": "removed"}
+async def delete_watchlist(ticker: str, _: str = Depends(validate_key)) -> dict[str, str]:
+    """Remove ticker from watchlist and cleanup all related calls and emails."""
+    logger = logging.getLogger(__name__)
+    ticker_upper = ticker.upper()
+    
+    try:
+        logger.info("Starting deletion process for ticker: %s", ticker_upper)
+        
+        # Check if ticker exists in watchlist before attempting deletion
+        current_tickers = store.list_tickers()
+        if ticker_upper not in current_tickers:
+            logger.warning("Ticker %s not found in watchlist", ticker_upper)
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Ticker {ticker_upper} not found in watchlist"
+            )
+        
+        # Count items before cleanup for reporting
+        logger.info("Counting existing calls and emails for %s before cleanup", ticker_upper)
+        calls_before = []
+        emails_before = []
+        
+        try:
+            # Count calls for this ticker
+            for path, data in calls_bucket.list_json("calls/"):
+                if data.get("ticker") == ticker_upper:
+                    calls_before.append(path)
+                    
+            # Count emails for this ticker
+            for path, data in email_bucket.list_json("queue/"):
+                if data.get("ticker") == ticker_upper:
+                    emails_before.append(path)
+                    
+            logger.info("Found %d calls and %d emails for %s", 
+                       len(calls_before), len(emails_before), ticker_upper)
+        except Exception as e:
+            logger.warning("Error counting existing items: %s", str(e))
+            # Continue with deletion even if counting fails
+        
+        # Remove ticker from watchlist
+        logger.info("Removing %s from watchlist", ticker_upper)
+        store.remove_ticker(ticker_upper)
+        
+        # Clean up related calls and emails
+        remaining_tickers = set(store.list_tickers())
+        logger.info("Cleaning up calls and emails for removed ticker %s", ticker_upper)
+        
+        cleanup_calls_queue(calls_bucket, remaining_tickers)
+        cleanup_email_queue(email_bucket, remaining_tickers)
+        
+        # Create detailed success message
+        cleanup_details = []
+        if calls_before:
+            cleanup_details.append(f"{len(calls_before)} scheduled call(s)")
+        if emails_before:
+            cleanup_details.append(f"{len(emails_before)} queued email(s)")
+            
+        if cleanup_details:
+            cleanup_msg = f" and removed {', '.join(cleanup_details)}"
+        else:
+            cleanup_msg = ""
+            
+        success_message = f"{ticker_upper} removed from watchlist{cleanup_msg}"
+        logger.info("Successfully completed deletion for %s: %s", ticker_upper, success_message)
+        
+        return {"message": success_message}
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 404)
+        raise
+    except Exception as e:
+        logger.error("Error deleting ticker %s: %s", ticker_upper, str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to remove {ticker_upper} from watchlist: {str(e)}"
+        )
 
 
 @app.get("/earnings/upcoming")
@@ -438,6 +512,7 @@ async def daily_sync(_: str = Depends(validate_key)) -> dict[str, str]:
 @app.post("/tasks/upcoming-sync")
 async def upcoming_sync(_: str = Depends(validate_key)) -> dict[str, str]:
     await refresh_upcoming_calls(store, calls_bucket, email_bucket)
+    cleanup_calls_queue(calls_bucket, set(store.list_tickers()))
     cleanup_email_queue(email_bucket, set(store.list_tickers()))
     return {"status": "ok"}
 
@@ -2073,11 +2148,16 @@ WATCHLIST_HTML = """
         });
         
         if (!resp.ok) {
-          throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+          const errorData = await resp.json();
+          throw new Error(errorData.detail || `HTTP ${resp.status}: ${resp.statusText}`);
         }
         
-        showMessage(`${ticker.toUpperCase()} removed from watchlist`, 'success', 'fas fa-check-circle');
+        const result = await resp.json();
+        showMessage(result.message || `${ticker.toUpperCase()} removed from watchlist`, 'success', 'fas fa-check-circle');
+        
+        // Refresh both watchlist and earnings data
         loadWatchlist();
+        loadUpcomingEarnings();
         
       } catch (error) {
         console.error('Error deleting ticker:', error);

@@ -8,6 +8,7 @@ from src.earnings_alerts import (
     GcsBucket,
     refresh_upcoming_calls,
     cleanup_email_queue,
+    cleanup_calls_queue,
     send_due_emails,
 )
 
@@ -40,7 +41,7 @@ async def test_refresh_upcoming_calls_creates_objects(buckets):
         fetcher=fetcher,
     )
     call_bucket.blob.assert_called_with("calls/AAPL/2025-07-30.json")
-    assert email_bucket.blob.call_count == 3
+    assert email_bucket.blob.call_count == 2  # one_week and tomorrow reminders
 
 
 def test_cleanup_email_queue_removes_unknown(buckets):
@@ -56,6 +57,21 @@ def test_cleanup_email_queue_removes_unknown(buckets):
     ), patch.object(bucket, "delete") as delete:
         cleanup_email_queue(bucket, {"AAPL"})
         delete.assert_called_once_with("queue/MSFT/x.json")
+
+
+def test_cleanup_calls_queue_removes_unknown(buckets):
+    _, _ = buckets
+    bucket = GcsBucket("calls-b")
+    with patch.object(
+        bucket,
+        "list_json",
+        return_value=[
+            ("calls/MSFT/2025-08-01.json", {"ticker": "MSFT"}),
+            ("calls/AAPL/2025-08-02.json", {"ticker": "AAPL"}),
+        ],
+    ), patch.object(bucket, "delete") as delete:
+        cleanup_calls_queue(bucket, {"AAPL"})
+        delete.assert_called_once_with("calls/MSFT/2025-08-01.json")
 
 
 def test_send_due_emails_dispatches(buckets):
