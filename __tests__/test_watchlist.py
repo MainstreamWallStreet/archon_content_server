@@ -8,11 +8,20 @@ from src.banshee_watchlist import BansheeStore
 
 @pytest.fixture
 def mock_storage_client():
-    with patch("google.cloud.storage.Client") as mock_client:
+    with patch("google.cloud.storage.Client") as mock_client, patch("src.banshee_watchlist.send_alert") as _:
         mock_bucket = Mock()
-        mock_blob = Mock()
+        created_blobs: list[Mock] = []
         mock_client.return_value.bucket.return_value = mock_bucket
-        mock_bucket.blob.return_value = mock_blob
+
+        # Each call to bucket.blob() returns a new blob mock (exists() -> False)
+        def _make_blob(*args, **kwargs):
+            blob = Mock()
+            blob.exists.return_value = False
+            created_blobs.append(blob)
+            return blob
+
+        mock_bucket.blob.side_effect = _make_blob
+        mock_bucket.created_blobs = created_blobs
         mock_bucket.exists.return_value = True
         yield mock_client
 
@@ -25,8 +34,9 @@ def store(mock_storage_client):
 def test_add_ticker_saves_json(store):
     store.add_ticker("AAPL", "griffin")
     store._bucket.blob.assert_called_with("watchlist/AAPL.json")
-    assert store._bucket.blob.return_value.upload_from_string.called
-    payload = store._bucket.blob.return_value.upload_from_string.call_args[0][0]
+    # Find the blob that was written by add_ticker
+    written_blob = next(b for b in store._bucket.created_blobs if b.upload_from_string.called)
+    payload = written_blob.upload_from_string.call_args[0][0]
     data = json.loads(payload)
     assert data["name"] == "AAPL"
     assert data["created_by_user"] == "griffin"

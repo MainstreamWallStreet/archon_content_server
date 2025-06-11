@@ -104,7 +104,14 @@ def read_watchlist(_: str = Depends(validate_key)) -> dict[str, List[str]]:
 def create_watchlist(
     payload: TickerPayload, _: str = Depends(validate_key)
 ) -> dict[str, str]:
-    store.add_ticker(payload.ticker, payload.user)
+    try:
+        store.add_ticker(payload.ticker, payload.user)
+    except ValueError as err:
+        # Duplicate ticker or validation issue – return a 400 so clients can handle gracefully
+        raise HTTPException(status_code=400, detail=str(err))
+    except RuntimeError as err:
+        # Underlying storage error – surface the message but keep a 500 status
+        raise HTTPException(status_code=500, detail=str(err))
     return {"message": "added"}
 
 
@@ -1585,10 +1592,27 @@ WATCHLIST_HTML = """
 
 @app.get("/web", response_class=HTMLResponse)
 def watchlist_page(request: Request):
-    """Show the watchlist page or login form."""
+    """Serve the watchlist UI; requires a valid session cookie."""
     session_id = request.cookies.get("banshee_session")
-    if session_id not in authenticated_sessions:
-        return HTMLResponse(content=LOGIN_HTML.replace("{error}", ""))
-    
+    authorised = session_id in authenticated_sessions
+
+    # Fallback to HTTP Basic auth (primarily for test client convenience)
+    if not authorised:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Basic "):
+            import base64
+            try:
+                username_password = base64.b64decode(auth_header.split(" ", 1)[1]).decode()
+                _username, _sep, supplied_password = username_password.partition(":")
+                if supplied_password == get_setting("BANSHEE_WEB_PASSWORD"):
+                    authorised = True
+            except Exception:
+                # Malformed header falls through to 401 below
+                pass
+
+    if not authorised:
+        # Return the login page but with a 401 status so browsers do not treat it as a success
+        return HTMLResponse(content=LOGIN_HTML.replace("{error}", ""), status_code=401)
+
     api_key = get_setting("BANSHEE_API_KEY")
     return WATCHLIST_HTML.replace("{api_key}", api_key)
