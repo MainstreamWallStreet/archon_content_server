@@ -234,18 +234,100 @@ async def refresh_upcoming_calls(
               total_calls_saved, calls_bucket.name, total_emails_queued, email_bucket.name)
 
 
-def cleanup_email_queue(email_bucket: GcsBucket, tickers: set[str]) -> None:
-    """Remove queued emails for tickers no longer tracked."""
+def cleanup_email_queue(email_bucket: GcsBucket, tickers: set[str]) -> int:
+    """Remove queued emails for tickers no longer tracked.
+    
+    Returns:
+        int: Number of emails removed
+    """
+    removed_count = 0
     for path, data in email_bucket.list_json("queue/"):
         if data.get("ticker") not in tickers:
             email_bucket.delete(path)
+            removed_count += 1
+            logger.info("Removed stale email for ticker %s: %s", data.get("ticker"), path)
+    
+    if removed_count > 0:
+        logger.info("Cleanup complete: removed %d stale email(s) from queue", removed_count)
+    
+    return removed_count
 
 
-def cleanup_calls_queue(calls_bucket: GcsBucket, tickers: set[str]) -> None:
-    """Remove scheduled calls for tickers no longer tracked."""
+def cleanup_calls_queue(calls_bucket: GcsBucket, tickers: set[str]) -> int:
+    """Remove scheduled calls for tickers no longer tracked.
+    
+    Returns:
+        int: Number of calls removed
+    """
+    removed_count = 0
     for path, data in calls_bucket.list_json("calls/"):
         if data.get("ticker") not in tickers:
             calls_bucket.delete(path)
+            removed_count += 1
+            logger.info("Removed stale call for ticker %s: %s", data.get("ticker"), path)
+    
+    if removed_count > 0:
+        logger.info("Cleanup complete: removed %d stale call(s) from storage", removed_count)
+    
+    return removed_count
+
+
+def cleanup_past_data(calls_bucket: GcsBucket, email_bucket: GcsBucket, *, now: datetime | None = None) -> tuple[int, int]:
+    """Remove past calls and emails that are no longer relevant.
+    
+    Args:
+        calls_bucket: GCS bucket containing calls
+        email_bucket: GCS bucket containing emails
+        now: Current time (defaults to now in UTC)
+        
+    Returns:
+        tuple[int, int]: Number of (calls_removed, emails_removed)
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+    
+    calls_removed = 0
+    emails_removed = 0
+    
+    # Clean up past calls (older than 24 hours)
+    cutoff_time = now - timedelta(hours=24)
+    
+    for path, data in calls_bucket.list_json("calls/"):
+        try:
+            call_time = datetime.fromisoformat(data["call_time"])
+            if call_time < cutoff_time:
+                calls_bucket.delete(path)
+                calls_removed += 1
+                logger.info("Removed past call for %s at %s: %s", 
+                          data.get("ticker"), call_time.isoformat(), path)
+        except (KeyError, ValueError) as e:
+            logger.warning("Invalid call data in %s: %s", path, str(e))
+            # Remove invalid data as well
+            calls_bucket.delete(path)
+            calls_removed += 1
+    
+    # Clean up past emails (send time more than 1 hour ago)
+    email_cutoff = now - timedelta(hours=1)
+    
+    for path, data in email_bucket.list_json("queue/"):
+        try:
+            send_time = datetime.fromisoformat(data["send_time"])
+            if send_time < email_cutoff:
+                email_bucket.delete(path)
+                emails_removed += 1
+                logger.info("Removed past email for %s scheduled at %s: %s", 
+                          data.get("ticker"), send_time.isoformat(), path)
+        except (KeyError, ValueError) as e:
+            logger.warning("Invalid email data in %s: %s", path, str(e))
+            # Remove invalid data as well
+            email_bucket.delete(path)
+            emails_removed += 1
+    
+    if calls_removed > 0 or emails_removed > 0:
+        logger.info("Past data cleanup complete: removed %d call(s) and %d email(s)", 
+                   calls_removed, emails_removed)
+    
+    return calls_removed, emails_removed
 
 
 def _render(kind: str, ticker: str, call_time: datetime) -> tuple[str, str]:

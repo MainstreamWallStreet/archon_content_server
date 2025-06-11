@@ -59,10 +59,17 @@ def test_delete_watchlist_endpoint():
         "src.banshee_api.cleanup_email_queue"
     ) as clean_email, patch(
         "src.banshee_api.cleanup_calls_queue"
-    ) as clean_calls:
+    ) as clean_calls, patch(
+        "src.banshee_api.cleanup_past_data"
+    ) as clean_past:
         store.list_tickers.return_value = ["AAPL", "MSFT"]
         calls_bucket.list_json.return_value = []
         email_bucket.list_json.return_value = []
+        
+        # Mock cleanup functions to return counts
+        clean_calls.return_value = 1  # 1 call removed
+        clean_email.return_value = 2  # 2 emails removed
+        clean_past.return_value = (0, 0)  # No past data removed
         
         client = TestClient(app)
         resp = client.delete("/watchlist/AAPL", headers=HEADERS)
@@ -70,4 +77,5 @@ def test_delete_watchlist_endpoint():
         store.remove_ticker.assert_called_with("AAPL")
         assert clean_email.called
         assert clean_calls.called
+        assert clean_past.called
         assert "AAPL removed from watchlist" in resp.json()["message"]

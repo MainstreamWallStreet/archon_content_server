@@ -22,6 +22,7 @@ from src.earnings_alerts import (
     refresh_upcoming_calls,
     cleanup_email_queue,
     cleanup_calls_queue,
+    cleanup_past_data,
     send_due_emails,
 )
 
@@ -189,20 +190,38 @@ async def delete_watchlist(ticker: str, _: str = Depends(validate_key)) -> dict[
         remaining_tickers = set(store.list_tickers())
         logger.info("Cleaning up calls and emails for removed ticker %s", ticker_upper)
         
-        cleanup_calls_queue(calls_bucket, remaining_tickers)
-        cleanup_email_queue(email_bucket, remaining_tickers)
+        removed_calls = cleanup_calls_queue(calls_bucket, remaining_tickers)
+        removed_emails = cleanup_email_queue(email_bucket, remaining_tickers)
+        
+        # Clean up past/expired data to keep storage lean
+        logger.info("Cleaning up past calls and expired emails")
+        past_calls, past_emails = cleanup_past_data(calls_bucket, email_bucket)
         
         # Create detailed success message
         cleanup_details = []
-        if calls_before:
-            cleanup_details.append(f"{len(calls_before)} scheduled call(s)")
-        if emails_before:
-            cleanup_details.append(f"{len(emails_before)} queued email(s)")
+        total_removed_calls = removed_calls + past_calls
+        total_removed_emails = removed_emails + past_emails
+        
+        if total_removed_calls > 0:
+            if removed_calls > 0 and past_calls > 0:
+                cleanup_details.append(f"removed {total_removed_calls} call(s) ({removed_calls} stale, {past_calls} past)")
+            elif removed_calls > 0:
+                cleanup_details.append(f"removed {removed_calls} stale call(s)")
+            else:
+                cleanup_details.append(f"removed {past_calls} past call(s)")
+                
+        if total_removed_emails > 0:
+            if removed_emails > 0 and past_emails > 0:
+                cleanup_details.append(f"removed {total_removed_emails} email(s) ({removed_emails} stale, {past_emails} expired)")
+            elif removed_emails > 0:
+                cleanup_details.append(f"removed {removed_emails} stale email(s)")
+            else:
+                cleanup_details.append(f"removed {past_emails} expired email(s)")
             
         if cleanup_details:
-            cleanup_msg = f" and removed {', '.join(cleanup_details)}"
+            cleanup_msg = f" and {', '.join(cleanup_details)}"
         else:
-            cleanup_msg = ""
+            cleanup_msg = " (no cleanup needed)"
             
         success_message = f"{ticker_upper} removed from watchlist{cleanup_msg}"
         logger.info("Successfully completed deletion for %s: %s", ticker_upper, success_message)
@@ -511,10 +530,66 @@ async def daily_sync(_: str = Depends(validate_key)) -> dict[str, str]:
 
 @app.post("/tasks/upcoming-sync")
 async def upcoming_sync(_: str = Depends(validate_key)) -> dict[str, str]:
-    await refresh_upcoming_calls(store, calls_bucket, email_bucket)
-    cleanup_calls_queue(calls_bucket, set(store.list_tickers()))
-    cleanup_email_queue(email_bucket, set(store.list_tickers()))
-    return {"status": "ok"}
+    """Refresh upcoming earnings calls and clean up stale data."""
+    logger = logging.getLogger(__name__)
+    logger.info("Starting comprehensive upcoming earnings sync")
+    
+    try:
+        # Get current ticker count for reference
+        current_tickers = set(store.list_tickers())
+        ticker_count = len(current_tickers)
+        logger.info("Current watchlist contains %d tickers: %s", ticker_count, list(current_tickers))
+        
+        # Refresh upcoming calls (this will fetch new data and create new calls/emails)
+        logger.info("Refreshing upcoming earnings calls from API")
+        await refresh_upcoming_calls(store, calls_bucket, email_bucket)
+        
+        # Clean up stale data that no longer corresponds to watchlist tickers
+        logger.info("Cleaning up stale calls and emails")
+        removed_calls = cleanup_calls_queue(calls_bucket, current_tickers)
+        removed_emails = cleanup_email_queue(email_bucket, current_tickers)
+        
+        # Clean up past/expired data to keep storage lean
+        logger.info("Cleaning up past calls and expired emails")
+        past_calls, past_emails = cleanup_past_data(calls_bucket, email_bucket)
+        
+        # Create detailed response message
+        cleanup_details = []
+        total_removed_calls = removed_calls + past_calls
+        total_removed_emails = removed_emails + past_emails
+        
+        if total_removed_calls > 0:
+            if removed_calls > 0 and past_calls > 0:
+                cleanup_details.append(f"removed {total_removed_calls} call(s) ({removed_calls} stale, {past_calls} past)")
+            elif removed_calls > 0:
+                cleanup_details.append(f"removed {removed_calls} stale call(s)")
+            else:
+                cleanup_details.append(f"removed {past_calls} past call(s)")
+                
+        if total_removed_emails > 0:
+            if removed_emails > 0 and past_emails > 0:
+                cleanup_details.append(f"removed {total_removed_emails} email(s) ({removed_emails} stale, {past_emails} expired)")
+            elif removed_emails > 0:
+                cleanup_details.append(f"removed {removed_emails} stale email(s)")
+            else:
+                cleanup_details.append(f"removed {past_emails} expired email(s)")
+            
+        if cleanup_details:
+            cleanup_msg = f" and {', '.join(cleanup_details)}"
+        else:
+            cleanup_msg = " (no cleanup needed)"
+            
+        success_message = f"Sync completed for {ticker_count} ticker(s){cleanup_msg}"
+        logger.info("Successfully completed upcoming earnings sync: %s", success_message)
+        
+        return {"status": "ok", "message": success_message}
+        
+    except Exception as e:
+        logger.error("Error during upcoming earnings sync: %s", str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to sync upcoming earnings: {str(e)}"
+        )
 
 
 @app.post("/tasks/send-queued-emails")
@@ -2237,7 +2312,9 @@ WATCHLIST_HTML = """
         }
         
         const result = await resp.json();
-        showMessage('Upcoming earnings data refreshed successfully!', 'success', 'fas fa-check-circle');
+        // Show the detailed message from the backend
+        const message = result.message || 'Upcoming earnings data refreshed successfully!';
+        showMessage(message, 'success', 'fas fa-check-circle');
         
         // Reload the earnings data (use authenticated endpoint after refresh)
         loadUpcomingEarnings();

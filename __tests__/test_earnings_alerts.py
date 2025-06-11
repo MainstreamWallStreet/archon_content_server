@@ -9,6 +9,7 @@ from src.earnings_alerts import (
     refresh_upcoming_calls,
     cleanup_email_queue,
     cleanup_calls_queue,
+    cleanup_past_data,
     send_due_emails,
 )
 
@@ -55,8 +56,9 @@ def test_cleanup_email_queue_removes_unknown(buckets):
             ("queue/AAPL/y.json", {"ticker": "AAPL"}),
         ],
     ), patch.object(bucket, "delete") as delete:
-        cleanup_email_queue(bucket, {"AAPL"})
+        removed_count = cleanup_email_queue(bucket, {"AAPL"})
         delete.assert_called_once_with("queue/MSFT/x.json")
+        assert removed_count == 1
 
 
 def test_cleanup_calls_queue_removes_unknown(buckets):
@@ -70,8 +72,43 @@ def test_cleanup_calls_queue_removes_unknown(buckets):
             ("calls/AAPL/2025-08-02.json", {"ticker": "AAPL"}),
         ],
     ), patch.object(bucket, "delete") as delete:
-        cleanup_calls_queue(bucket, {"AAPL"})
+        removed_count = cleanup_calls_queue(bucket, {"AAPL"})
         delete.assert_called_once_with("calls/MSFT/2025-08-01.json")
+        assert removed_count == 1
+
+
+def test_cleanup_past_data_removes_old_items(buckets):
+    _, _ = buckets
+    call_bucket = GcsBucket("calls-b")
+    email_bucket = GcsBucket("email-b")
+    
+    # Set up a test time
+    now = datetime(2025, 7, 30, 15, 0, tzinfo=timezone.utc)
+    past_call_time = (now - timedelta(days=2)).isoformat()  # 2 days ago
+    old_email_time = (now - timedelta(hours=2)).isoformat()  # 2 hours ago
+    
+    with patch.object(
+        call_bucket,
+        "list_json",
+        return_value=[
+            ("calls/AAPL/old.json", {"ticker": "AAPL", "call_time": past_call_time}),
+            ("calls/MSFT/current.json", {"ticker": "MSFT", "call_time": (now + timedelta(days=1)).isoformat()}),
+        ],
+    ), patch.object(call_bucket, "delete") as call_delete, patch.object(
+        email_bucket,
+        "list_json",
+        return_value=[
+            ("queue/AAPL/old.json", {"ticker": "AAPL", "send_time": old_email_time}),
+            ("queue/MSFT/current.json", {"ticker": "MSFT", "send_time": (now + timedelta(minutes=30)).isoformat()}),
+        ],
+    ), patch.object(email_bucket, "delete") as email_delete:
+        
+        calls_removed, emails_removed = cleanup_past_data(call_bucket, email_bucket, now=now)
+        
+        call_delete.assert_called_once_with("calls/AAPL/old.json")
+        email_delete.assert_called_once_with("queue/AAPL/old.json")
+        assert calls_removed == 1
+        assert emails_removed == 1
 
 
 def test_send_due_emails_dispatches(buckets):
