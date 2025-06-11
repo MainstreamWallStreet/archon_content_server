@@ -1,6 +1,36 @@
 # Changelog
 <!-- ruff: noqa -->
 
+## [2025-01-10] - Earnings Monitoring System Overhaul
+### Added
+- **Refresh Button for Upcoming Earnings**: Added a refresh button to the web UI's "Upcoming Calls" tab that manually triggers data refresh
+- **Comprehensive Earnings Data Logging**: Extremely detailed logging for every step of the earnings refresh process, showing:
+  - API requests and responses for each ticker
+  - Date field detection and parsing attempts
+  - GCS storage operations with exact file paths
+  - Email queue generation with timestamps and locations
+- **Robust Date Field Fallbacks**: System now tries multiple date field names when parsing API responses:
+  - `earnings_date`, `date`, `announcement_date`, `report_date`, `call_date`, `earnings_call_date`
+- **Multiple API Endpoint Fallbacks**: If the primary API endpoint fails, automatically tries alternative endpoints:
+  - Primary: `/earningscalendar?ticker=X&show_upcoming=true`
+  - Fallback: `/earningscalendar?ticker=X` (all earnings data)
+- **Smart Date Parsing**: Handles multiple date formats including:
+  - Date-only strings (`2026-04-13`) with assumed market close time
+  - ISO format with Z timezone (`2026-04-13T21:00:00Z`)
+  - Timezone-aware datetime objects
+- **GCS-Based Earnings Display**: UI now reads upcoming earnings from GCS storage instead of making live API calls
+
+### Changed
+- **Simplified Email Notifications**: Removed one-hour notifications since API only provides dates, not specific times
+- **Earnings Data Source**: `/earnings/upcoming` endpoint now reads from GCS storage for faster, more reliable data access
+- **Email Schedule Optimization**: Only sends meaningful notifications (one week before, day before) based on available date precision
+
+### Fixed
+- **Timezone Comparison Errors**: Fixed "can't compare offset-naive and offset-aware datetimes" errors by ensuring all datetime objects have proper timezone info
+- **Missing Earnings Data in UI**: Resolved issue where earnings calls were saved to GCS but not displayed in the web interface
+- **API Response Field Variations**: Handles cases where API returns different field names than expected
+- **Date Format Inconsistencies**: Robust parsing for various date formats returned by the earnings API
+
 ## Unreleased
 ### Added
 - **Enhanced Email Alert Logging**: Comprehensive logging now shows exactly which email addresses are receiving alerts, with detailed success/failure status for each recipient

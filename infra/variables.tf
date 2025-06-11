@@ -54,11 +54,6 @@ variable "alert_from_email" {
   default     = "gclark0812@gmail.com"
 }
 
-variable "web_password" {
-  description = "Password for the Banshee web interface"
-  type        = string
-  sensitive   = true
-}
 
 variable "earnings_bucket" {
   description = "Bucket for upcoming earnings data"
@@ -74,4 +69,10 @@ variable "alert_recipients" {
   description = "List of email addresses to receive alerts"
   type        = list(string)
   default     = ["gclark0812@gmail.com", "psmith1111@icloud.com"]
+}
+
+variable "banshee_web_password" {
+  description = "Password for the Banshee web interface"
+  type        = string
+  sensitive   = true
 }

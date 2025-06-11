@@ -3,6 +3,8 @@ from __future__ import annotations
 import aiohttp
 from typing import List
 from datetime import datetime, timezone
+import logging
+import json
 
 from fastapi import Depends, FastAPI, HTTPException, Security, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -142,48 +144,65 @@ def delete_watchlist(ticker: str, _: str = Depends(validate_key)) -> dict[str, s
 async def get_upcoming_earnings(
     _: str = Depends(validate_key),
 ) -> UpcomingCallsResponse:
-    """Get upcoming earnings calls for all watchlist tickers."""
+    """Get upcoming earnings calls from GCS storage."""
+    logger = logging.getLogger(__name__)
+    logger.info("Fetching upcoming earnings from GCS storage")
+    
     calls = []
-    tickers = store.list_tickers()
-
-    for ticker in tickers:
-        try:
-            # Fetch data with show_upcoming=true to get future earnings
-            data = await _fetch_api_ninjas_upcoming(ticker)
-            for item in data:
-                if "earnings_date" in item:
-                    call = EarningsCall(
-                        ticker=ticker,
-                        call_date=item["earnings_date"][:10],
-                        call_time=item["earnings_date"],
-                        status="scheduled",
-                        actual_eps=item.get("actual_eps"),
-                        estimated_eps=item.get("estimated_eps"),
-                        actual_revenue=item.get("actual_revenue"),
-                        estimated_revenue=item.get("estimated_revenue"),
-                    )
-                    calls.append(call)
-        except Exception as e:
-            # Skip failed tickers but log the error
-            print(f"Error fetching earnings for {ticker}: {e}")
-            continue
-
-    # Sort by call time
-    calls.sort(key=lambda x: x.call_time)
-
-    # Filter to only future calls
     now = datetime.now(timezone.utc)
-    future_calls = [
-        call
-        for call in calls
-        if datetime.fromisoformat(call.call_time.replace("Z", "+00:00")) > now
-    ]
-
-    next_call = future_calls[0] if future_calls else None
-
-    return UpcomingCallsResponse(
-        calls=future_calls, total_count=len(future_calls), next_call=next_call
-    )
+    
+    try:
+        # Get all saved calls from GCS
+        all_items = calls_bucket.list_json("calls/")
+        logger.info("Found %d total items in GCS calls bucket", len(all_items))
+        
+        for path, call_data in all_items:
+            try:
+                logger.info("Processing GCS item: %s -> %s", path, call_data)
+                
+                # Parse the call time
+                call_time_str = call_data["call_time"]
+                call_time = datetime.fromisoformat(call_time_str)
+                
+                # Only include future calls
+                if call_time <= now:
+                    logger.info("Skipping past call: %s at %s", call_data["ticker"], call_time_str)
+                    continue
+                
+                # Create EarningsCall object
+                call = EarningsCall(
+                    ticker=call_data["ticker"],
+                    call_date=call_data["call_date"],
+                    call_time=call_time_str,
+                    status="scheduled",
+                    actual_eps=None,
+                    estimated_eps=None,
+                    actual_revenue=None,
+                    estimated_revenue=None,
+                )
+                calls.append(call)
+                logger.info("Added upcoming call: %s on %s", call.ticker, call.call_date)
+                
+            except Exception as e:
+                logger.error("Error processing GCS item %s: %s", path, str(e))
+                continue
+        
+        # Sort by call time
+        calls.sort(key=lambda x: x.call_time)
+        
+        next_call = calls[0] if calls else None
+        
+        logger.info("Returning %d upcoming calls", len(calls))
+        return UpcomingCallsResponse(
+            calls=calls, total_count=len(calls), next_call=next_call
+        )
+        
+    except Exception as e:
+        logger.error("Error fetching upcoming earnings from GCS: %s", str(e))
+        # Return empty response if there's an error
+        return UpcomingCallsResponse(
+            calls=[], total_count=0, next_call=None
+        )
 
 
 @app.get("/earnings/{ticker}")
@@ -234,14 +253,92 @@ async def _fetch_api_ninjas(ticker: str) -> list[dict]:
 
 
 async def _fetch_api_ninjas_upcoming(ticker: str) -> list[dict]:
-    """Fetch upcoming earnings calls from API Ninjas."""
-    url = f"https://api.api-ninjas.com/v1/earningscalendar?ticker={ticker}&show_upcoming=true"
+    """Fetch upcoming earnings calls from API Ninjas with fallback strategies."""
+    logger = logging.getLogger(__name__)
+    
+    # Try multiple API approaches as fallbacks
+    api_attempts = [
+        {
+            "url": f"https://api.api-ninjas.com/v1/earningscalendar?ticker={ticker}&show_upcoming=true",
+            "name": "upcoming_earnings_with_flag"
+        },
+        {
+            "url": f"https://api.api-ninjas.com/v1/earningscalendar?ticker={ticker}",
+            "name": "all_earnings_data"
+        }
+    ]
+    
     headers = {"X-Api-Key": get_setting("API_NINJAS_KEY")}
-    async with aiohttp.ClientSession() as sess:
-        async with sess.get(url, headers=headers) as resp:
-            if resp.status != 200:
-                raise RuntimeError(f"API Ninjas error {resp.status}")
-            return await resp.json()
+    
+    for attempt_num, attempt in enumerate(api_attempts, 1):
+        logger.info("API attempt %d/%d for %s using %s", attempt_num, len(api_attempts), ticker, attempt["name"])
+        logger.info("Request URL: %s", attempt["url"])
+        logger.info("Request headers: %s", {k: v[:10] + "..." if k == "X-Api-Key" and len(v) > 10 else v for k, v in headers.items()})
+        
+        async with aiohttp.ClientSession() as sess:
+            try:
+                async with sess.get(attempt["url"], headers=headers) as resp:
+                    logger.info("API response status for %s (attempt %d): %d", ticker, attempt_num, resp.status)
+                    
+                    if resp.status != 200:
+                        logger.error("API Ninjas error for %s (attempt %d): status %d", ticker, attempt_num, resp.status)
+                        response_text = await resp.text()
+                        logger.error("Error response body for %s (attempt %d): %s", ticker, attempt_num, response_text)
+                        
+                        # If this isn't the last attempt, continue to next one
+                        if attempt_num < len(api_attempts):
+                            logger.info("Trying next API approach for %s", ticker)
+                            continue
+                        else:
+                            raise RuntimeError(f"All API attempts failed for {ticker}")
+                    
+                    result = await resp.json()
+                    logger.info("API response for %s (attempt %d): %s", ticker, attempt_num, json.dumps(result, indent=2) if result else "[]")
+                    
+                    # Check if this result has usable data
+                    if result and isinstance(result, list) and len(result) > 0:
+                        # Check if any items have date fields we can use
+                        usable_items = 0
+                        date_fields = ['earnings_date', 'date', 'announcement_date', 'report_date', 'call_date', 'earnings_call_date']
+                        
+                        for item in result:
+                            if any(field in item and item[field] for field in date_fields):
+                                usable_items += 1
+                        
+                        logger.info("Found %d usable items out of %d total for %s (attempt %d)", 
+                                  usable_items, len(result), ticker, attempt_num)
+                        
+                        if usable_items > 0:
+                            logger.info("Successfully retrieved usable data for %s using %s", ticker, attempt["name"])
+                            return result
+                        else:
+                            logger.warning("No usable date fields found in response for %s (attempt %d)", ticker, attempt_num)
+                            if attempt_num < len(api_attempts):
+                                logger.info("Trying next API approach for %s", ticker)
+                                continue
+                    else:
+                        logger.warning("Empty or invalid result for %s (attempt %d)", ticker, attempt_num)
+                        if attempt_num < len(api_attempts):
+                            logger.info("Trying next API approach for %s", ticker)
+                            continue
+                    
+                    # If we get here and it's the last attempt, return whatever we got
+                    if attempt_num == len(api_attempts):
+                        logger.warning("Returning potentially empty result for %s after all attempts", ticker)
+                        return result or []
+                        
+            except Exception as e:
+                logger.error("Exception during API request for %s (attempt %d): %s", ticker, attempt_num, str(e))
+                if attempt_num < len(api_attempts):
+                    logger.info("Trying next API approach for %s due to exception", ticker)
+                    continue
+                else:
+                    logger.error("All API attempts failed for %s", ticker)
+                    raise
+    
+    # This should never be reached, but just in case
+    logger.error("Unexpected end of function for %s", ticker)
+    return []
 
 
 async def sync_watchlist(custom_store: BansheeStore | None = None) -> None:
@@ -633,8 +730,10 @@ WATCHLIST_HTML = """
       border-radius: 16px;
       padding: 1.5rem;
       margin-bottom: 1.5rem;
-      text-align: center;
       backdrop-filter: blur(10px);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     .stats {
       color: #667eea;
@@ -642,8 +741,37 @@ WATCHLIST_HTML = """
       font-size: 1.1rem;
       display: flex;
       align-items: center;
-      justify-content: center;
       gap: 0.5rem;
+    }
+    .refresh-btn {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      border: none;
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 600;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    }
+    .refresh-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+    }
+    .refresh-btn:active {
+      transform: translateY(0);
+    }
+    .refresh-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .refresh-btn.loading i {
+      animation: spin 1s linear infinite;
     }
     .add-form {
       background: rgba(248, 250, 252, 0.8);
@@ -1135,6 +1263,10 @@ WATCHLIST_HTML = """
           <i class="fas fa-clock"></i>
           <span id="earnings-count">Loading upcoming earnings...</span>
         </div>
+        <button id="refresh-earnings-btn" class="refresh-btn" onclick="refreshUpcomingEarnings()">
+          <i class="fas fa-sync-alt"></i>
+          <span>Refresh</span>
+        </button>
       </div>
       
       <div id="earnings-loading" class="loading">
@@ -1627,6 +1759,46 @@ WATCHLIST_HTML = """
     
     // Load watchlist on page load
     loadWatchlist();
+    
+    async function refreshUpcomingEarnings() {
+      const refreshBtn = document.getElementById('refresh-earnings-btn');
+      const btnIcon = refreshBtn.querySelector('i');
+      const btnText = refreshBtn.querySelector('span');
+      
+      try {
+        // Show loading state
+        refreshBtn.disabled = true;
+        refreshBtn.classList.add('loading');
+        btnText.textContent = 'Refreshing...';
+        
+        showMessage('Refreshing upcoming earnings data...', 'success', 'fas fa-sync-alt');
+        
+        // Call the refresh endpoint
+        const resp = await fetch('/tasks/upcoming-sync', {
+          method: 'POST',
+          headers: {'X-API-Key': apiKey}
+        });
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        }
+        
+        const result = await resp.json();
+        showMessage('Upcoming earnings data refreshed successfully!', 'success', 'fas fa-check-circle');
+        
+        // Reload the earnings data
+        loadUpcomingEarnings();
+        
+      } catch (error) {
+        console.error('Error refreshing earnings:', error);
+        showMessage(`Error refreshing earnings: ${error.message}`, 'error');
+      } finally {
+        // Restore button state
+        refreshBtn.disabled = false;
+        refreshBtn.classList.remove('loading');
+        btnText.textContent = 'Refresh';
+      }
+    }
   </script>
 </body>
 </html>
