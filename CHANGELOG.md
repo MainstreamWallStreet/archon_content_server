@@ -1,5 +1,9 @@
 # Changelog
 <!-- ruff: noqa -->
+## [2025-01-11] - Template cleanup
+### Changed
+- Moved inline HTML to Jinja templates for the web UI
+
 
 ## [2025-01-10] - Instant Earnings Data Loading
 ### Added
