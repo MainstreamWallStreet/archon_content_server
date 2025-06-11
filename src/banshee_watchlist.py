@@ -39,6 +39,9 @@ class BansheeStore:
     def add_ticker(self, ticker: str, user: str) -> None:
         """Create a watchlist object for ``ticker``."""
         blob = self._bucket.blob(f"watchlist/{ticker.upper()}.json")
+        # Fail fast if the ticker already exists
+        if blob.exists() is True:
+            raise ValueError(f"Ticker {ticker.upper()} already exists in watchlist")
         obj = {
             "name": ticker.upper(),
             "created_by_user": user,
