@@ -3,6 +3,8 @@ from __future__ import annotations
 import aiohttp
 from typing import List
 from datetime import datetime, timezone
+import logging
+import json
 
 from fastapi import Depends, FastAPI, HTTPException, Security, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -15,6 +17,14 @@ from src.notifications import send_alert
 
 from src.config import get_setting
 from src.banshee_watchlist import BansheeStore
+from src.earnings_alerts import (
+    GcsBucket,
+    refresh_upcoming_calls,
+    cleanup_email_queue,
+    cleanup_calls_queue,
+    cleanup_past_data,
+    send_due_emails,
+)
 
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key")
 
@@ -27,6 +37,8 @@ def validate_key(api_key: str = Security(API_KEY_HEADER)) -> str:
 
 
 store = BansheeStore(get_setting("BANSHEE_DATA_BUCKET"))
+calls_bucket = GcsBucket(get_setting("EARNINGS_BUCKET"))
+email_bucket = GcsBucket(get_setting("EMAIL_QUEUE_BUCKET"))
 app = FastAPI(title="Banshee API", version="1.0")
 
 # Serve static files (for logo, etc.)
@@ -58,6 +70,7 @@ class AlertPayload(BaseModel):
 
 class EarningsCall(BaseModel):
     """Data model for an earnings call event."""
+
     ticker: str
     call_date: str  # YYYY-MM-DD format
     call_time: str  # ISO 8601 datetime string
@@ -70,6 +83,7 @@ class EarningsCall(BaseModel):
 
 class UpcomingCallsResponse(BaseModel):
     """Response model for upcoming earnings calls."""
+
     calls: List[EarningsCall]
     total_count: int
     next_call: EarningsCall | None = None
@@ -86,13 +100,20 @@ def web_login(password: str = Form(...)):
     """Simple password-based login for web interface."""
     expected_password = get_setting("BANSHEE_WEB_PASSWORD")
     if not secrets.compare_digest(password, expected_password):
-        return HTMLResponse(content=LOGIN_HTML.replace("{error}", "<div class='error'><i class='fas fa-exclamation-triangle'></i>Invalid password. Please try again.</div>"), status_code=401)
-    
+        return HTMLResponse(
+            content=LOGIN_HTML.replace(
+                "{error}",
+                "<div class='error'><i class='fas fa-exclamation-triangle'></i>Invalid password. Please try again.</div>",
+            ),
+            status_code=401,
+        )
+
     # Create a simple session token
     import uuid
+
     session_id = str(uuid.uuid4())
     authenticated_sessions.add(session_id)
-    
+
     # Redirect to main page with session cookie
     response = RedirectResponse(url="/web", status_code=302)
     response.set_cookie("banshee_session", session_id, max_age=3600 * 24)  # 24 hours
@@ -104,73 +125,256 @@ def read_watchlist(_: str = Depends(validate_key)) -> dict[str, List[str]]:
     return {"tickers": store.list_tickers()}
 
 
+@app.get("/public/watchlist")
+def read_watchlist_public() -> dict[str, List[str]]:
+    """Get the current watchlist - public endpoint."""
+    return {"tickers": store.list_tickers()}
+
+
 @app.post("/watchlist")
-def create_watchlist(
+async def create_watchlist(
     payload: TickerPayload, _: str = Depends(validate_key)
 ) -> dict[str, str]:
     store.add_ticker(payload.ticker, payload.user)
+    await refresh_upcoming_calls(store, calls_bucket, email_bucket)
+    cleanup_calls_queue(calls_bucket, set(store.list_tickers()))
+    cleanup_email_queue(email_bucket, set(store.list_tickers()))
     return {"message": "added"}
 
 
 @app.delete("/watchlist/{ticker}")
-def delete_watchlist(ticker: str, _: str = Depends(validate_key)) -> dict[str, str]:
-    store.remove_ticker(ticker)
-    return {"message": "removed"}
+async def delete_watchlist(ticker: str, _: str = Depends(validate_key)) -> dict[str, str]:
+    """Remove ticker from watchlist and cleanup all related calls and emails."""
+    logger = logging.getLogger(__name__)
+    ticker_upper = ticker.upper()
+    
+    try:
+        logger.info("Starting deletion process for ticker: %s", ticker_upper)
+        
+        # Check if ticker exists in watchlist before attempting deletion
+        current_tickers = store.list_tickers()
+        if ticker_upper not in current_tickers:
+            logger.warning("Ticker %s not found in watchlist", ticker_upper)
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Ticker {ticker_upper} not found in watchlist"
+            )
+        
+        # Count items before cleanup for reporting
+        logger.info("Counting existing calls and emails for %s before cleanup", ticker_upper)
+        calls_before = []
+        emails_before = []
+        
+        try:
+            # Count calls for this ticker
+            for path, data in calls_bucket.list_json("calls/"):
+                if data.get("ticker") == ticker_upper:
+                    calls_before.append(path)
+                    
+            # Count emails for this ticker
+            for path, data in email_bucket.list_json("queue/"):
+                if data.get("ticker") == ticker_upper:
+                    emails_before.append(path)
+                    
+            logger.info("Found %d calls and %d emails for %s", 
+                       len(calls_before), len(emails_before), ticker_upper)
+        except Exception as e:
+            logger.warning("Error counting existing items: %s", str(e))
+            # Continue with deletion even if counting fails
+        
+        # Remove ticker from watchlist
+        logger.info("Removing %s from watchlist", ticker_upper)
+        store.remove_ticker(ticker_upper)
+        
+        # Clean up related calls and emails
+        remaining_tickers = set(store.list_tickers())
+        logger.info("Cleaning up calls and emails for removed ticker %s", ticker_upper)
+        
+        removed_calls = cleanup_calls_queue(calls_bucket, remaining_tickers)
+        removed_emails = cleanup_email_queue(email_bucket, remaining_tickers)
+        
+        # Clean up past/expired data to keep storage lean
+        logger.info("Cleaning up past calls and expired emails")
+        past_calls, past_emails = cleanup_past_data(calls_bucket, email_bucket)
+        
+        # Create detailed success message
+        cleanup_details = []
+        total_removed_calls = removed_calls + past_calls
+        total_removed_emails = removed_emails + past_emails
+        
+        if total_removed_calls > 0:
+            if removed_calls > 0 and past_calls > 0:
+                cleanup_details.append(f"removed {total_removed_calls} call(s) ({removed_calls} stale, {past_calls} past)")
+            elif removed_calls > 0:
+                cleanup_details.append(f"removed {removed_calls} stale call(s)")
+            else:
+                cleanup_details.append(f"removed {past_calls} past call(s)")
+                
+        if total_removed_emails > 0:
+            if removed_emails > 0 and past_emails > 0:
+                cleanup_details.append(f"removed {total_removed_emails} email(s) ({removed_emails} stale, {past_emails} expired)")
+            elif removed_emails > 0:
+                cleanup_details.append(f"removed {removed_emails} stale email(s)")
+            else:
+                cleanup_details.append(f"removed {past_emails} expired email(s)")
+            
+        if cleanup_details:
+            cleanup_msg = f" and {', '.join(cleanup_details)}"
+        else:
+            cleanup_msg = " (no cleanup needed)"
+            
+        success_message = f"{ticker_upper} removed from watchlist{cleanup_msg}"
+        logger.info("Successfully completed deletion for %s: %s", ticker_upper, success_message)
+        
+        return {"message": success_message}
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 404)
+        raise
+    except Exception as e:
+        logger.error("Error deleting ticker %s: %s", ticker_upper, str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to remove {ticker_upper} from watchlist: {str(e)}"
+        )
 
 
 @app.get("/earnings/upcoming")
-async def get_upcoming_earnings(_: str = Depends(validate_key)) -> UpcomingCallsResponse:
-    """Get upcoming earnings calls for all watchlist tickers."""
+async def get_upcoming_earnings(
+    _: str = Depends(validate_key),
+) -> UpcomingCallsResponse:
+    """Get upcoming earnings calls from GCS storage."""
+    logger = logging.getLogger(__name__)
+    logger.info("Fetching upcoming earnings from GCS storage")
+    
     calls = []
-    tickers = store.list_tickers()
-    
-    for ticker in tickers:
-        try:
-            # Fetch data with show_upcoming=true to get future earnings
-            data = await _fetch_api_ninjas_upcoming(ticker)
-            for item in data:
-                if "earnings_date" in item:
-                    call = EarningsCall(
-                        ticker=ticker,
-                        call_date=item["earnings_date"][:10],
-                        call_time=item["earnings_date"],
-                        status="scheduled",
-                        actual_eps=item.get("actual_eps"),
-                        estimated_eps=item.get("estimated_eps"),
-                        actual_revenue=item.get("actual_revenue"),
-                        estimated_revenue=item.get("estimated_revenue")
-                    )
-                    calls.append(call)
-        except Exception as e:
-            # Skip failed tickers but log the error
-            print(f"Error fetching earnings for {ticker}: {e}")
-            continue
-    
-    # Sort by call time
-    calls.sort(key=lambda x: x.call_time)
-    
-    # Filter to only future calls
     now = datetime.now(timezone.utc)
-    future_calls = [
-        call for call in calls 
-        if datetime.fromisoformat(call.call_time.replace('Z', '+00:00')) > now
-    ]
     
-    next_call = future_calls[0] if future_calls else None
+    try:
+        # Get all saved calls from GCS
+        all_items = calls_bucket.list_json("calls/")
+        logger.info("Found %d total items in GCS calls bucket", len(all_items))
+        
+        for path, call_data in all_items:
+            try:
+                logger.info("Processing GCS item: %s -> %s", path, call_data)
+                
+                # Parse the call time
+                call_time_str = call_data["call_time"]
+                call_time = datetime.fromisoformat(call_time_str)
+                
+                # Only include future calls
+                if call_time <= now:
+                    logger.info("Skipping past call: %s at %s", call_data["ticker"], call_time_str)
+                    continue
+                
+                # Create EarningsCall object
+                call = EarningsCall(
+                    ticker=call_data["ticker"],
+                    call_date=call_data["call_date"],
+                    call_time=call_time_str,
+                    status="scheduled",
+                    actual_eps=None,
+                    estimated_eps=None,
+                    actual_revenue=None,
+                    estimated_revenue=None,
+                )
+                calls.append(call)
+                logger.info("Added upcoming call: %s on %s", call.ticker, call.call_date)
+                
+            except Exception as e:
+                logger.error("Error processing GCS item %s: %s", path, str(e))
+                continue
+        
+        # Sort by call time
+        calls.sort(key=lambda x: x.call_time)
+        
+        next_call = calls[0] if calls else None
+        
+        logger.info("Returning %d upcoming calls", len(calls))
+        return UpcomingCallsResponse(
+            calls=calls, total_count=len(calls), next_call=next_call
+        )
+        
+    except Exception as e:
+        logger.error("Error fetching upcoming earnings from GCS: %s", str(e))
+        # Return empty response if there's an error
+        return UpcomingCallsResponse(
+            calls=[], total_count=0, next_call=None
+        )
+
+
+@app.get("/public/earnings/upcoming")
+async def get_upcoming_earnings_public() -> UpcomingCallsResponse:
+    """Get upcoming earnings calls from GCS storage - public endpoint."""
+    logger = logging.getLogger(__name__)
+    logger.info("Fetching upcoming earnings from GCS storage (public endpoint)")
     
-    return UpcomingCallsResponse(
-        calls=future_calls,
-        total_count=len(future_calls),
-        next_call=next_call
-    )
+    calls = []
+    now = datetime.now(timezone.utc)
+    
+    try:
+        # Get all saved calls from GCS
+        all_items = calls_bucket.list_json("calls/")
+        logger.info("Found %d total items in GCS calls bucket", len(all_items))
+        
+        for path, call_data in all_items:
+            try:
+                logger.info("Processing GCS item: %s -> %s", path, call_data)
+                
+                # Parse the call time
+                call_time_str = call_data["call_time"]
+                call_time = datetime.fromisoformat(call_time_str)
+                
+                # Only include future calls
+                if call_time <= now:
+                    logger.info("Skipping past call: %s at %s", call_data["ticker"], call_time_str)
+                    continue
+                
+                # Create EarningsCall object
+                call = EarningsCall(
+                    ticker=call_data["ticker"],
+                    call_date=call_data["call_date"],
+                    call_time=call_time_str,
+                    status="scheduled",
+                    actual_eps=None,
+                    estimated_eps=None,
+                    actual_revenue=None,
+                    estimated_revenue=None,
+                )
+                calls.append(call)
+                logger.info("Added upcoming call: %s on %s", call.ticker, call.call_date)
+                
+            except Exception as e:
+                logger.error("Error processing GCS item %s: %s", path, str(e))
+                continue
+        
+        # Sort by call time
+        calls.sort(key=lambda x: x.call_time)
+        
+        next_call = calls[0] if calls else None
+        
+        logger.info("Returning %d upcoming calls", len(calls))
+        return UpcomingCallsResponse(
+            calls=calls, total_count=len(calls), next_call=next_call
+        )
+        
+    except Exception as e:
+        logger.error("Error fetching upcoming earnings from GCS: %s", str(e))
+        # Return empty response if there's an error
+        return UpcomingCallsResponse(
+            calls=[], total_count=0, next_call=None
+        )
 
 
 @app.get("/earnings/{ticker}")
-async def get_ticker_earnings(ticker: str, _: str = Depends(validate_key)) -> List[EarningsCall]:
+async def get_ticker_earnings(
+    ticker: str, _: str = Depends(validate_key)
+) -> List[EarningsCall]:
     """Get earnings calls for a specific ticker."""
     data = await _fetch_api_ninjas_upcoming(ticker)
     calls = []
-    
+
     for item in data:
         if "earnings_date" in item:
             call = EarningsCall(
@@ -181,10 +385,10 @@ async def get_ticker_earnings(ticker: str, _: str = Depends(validate_key)) -> Li
                 actual_eps=item.get("actual_eps"),
                 estimated_eps=item.get("estimated_eps"),
                 actual_revenue=item.get("actual_revenue"),
-                estimated_revenue=item.get("estimated_revenue")
+                estimated_revenue=item.get("estimated_revenue"),
             )
             calls.append(call)
-    
+
     # Sort by call time
     calls.sort(key=lambda x: x.call_time)
     return calls
@@ -211,14 +415,95 @@ async def _fetch_api_ninjas(ticker: str) -> list[dict]:
 
 
 async def _fetch_api_ninjas_upcoming(ticker: str) -> list[dict]:
-    """Fetch upcoming earnings calls from API Ninjas."""
-    url = f"https://api.api-ninjas.com/v1/earningscalendar?ticker={ticker}&show_upcoming=true"
+    """Fetch upcoming earnings calls from API Ninjas with fallback strategies."""
+    logger = logging.getLogger(__name__)
+    
+    # Primary approach: use show_upcoming=true as documented
+    # Fallback: get historical data and filter for future dates
+    api_attempts = [
+        {
+            "url": f"https://api.api-ninjas.com/v1/earningscalendar?ticker={ticker}&show_upcoming=true",
+            "name": "upcoming_only",
+            "expected_field": "date"  # Official API docs show 'date' field
+        },
+        {
+            "url": f"https://api.api-ninjas.com/v1/earningscalendar?ticker={ticker}",
+            "name": "historical_data",
+            "expected_field": "date"
+        }
+    ]
+    
     headers = {"X-Api-Key": get_setting("API_NINJAS_KEY")}
-    async with aiohttp.ClientSession() as sess:
-        async with sess.get(url, headers=headers) as resp:
-            if resp.status != 200:
-                raise RuntimeError(f"API Ninjas error {resp.status}")
-            return await resp.json()
+    
+    for attempt_num, attempt in enumerate(api_attempts, 1):
+        logger.info("API attempt %d/%d for %s using %s", attempt_num, len(api_attempts), ticker, attempt["name"])
+        logger.info("Request URL: %s", attempt["url"])
+        logger.info("Request headers: %s", {k: v[:10] + "..." if k == "X-Api-Key" and len(v) > 10 else v for k, v in headers.items()})
+        
+        async with aiohttp.ClientSession() as sess:
+            try:
+                async with sess.get(attempt["url"], headers=headers) as resp:
+                    logger.info("API response status for %s (attempt %d): %d", ticker, attempt_num, resp.status)
+                    
+                    if resp.status != 200:
+                        logger.error("API Ninjas error for %s (attempt %d): status %d", ticker, attempt_num, resp.status)
+                        response_text = await resp.text()
+                        logger.error("Error response body for %s (attempt %d): %s", ticker, attempt_num, response_text)
+                        
+                        # If this isn't the last attempt, continue to next one
+                        if attempt_num < len(api_attempts):
+                            logger.info("Trying next API approach for %s", ticker)
+                            continue
+                        else:
+                            raise RuntimeError(f"All API attempts failed for {ticker}")
+                    
+                    result = await resp.json()
+                    logger.info("API response for %s (attempt %d): %s", ticker, attempt_num, json.dumps(result, indent=2) if result else "[]")
+                    
+                    # Check if this result has usable data
+                    if result and isinstance(result, list) and len(result) > 0:
+                        # Prioritize 'date' field as documented, with fallbacks
+                        date_fields = ['date', 'earnings_date', 'announcement_date', 'report_date', 'call_date', 'earnings_call_date']
+                        
+                        usable_items = 0
+                        for item in result:
+                            if any(field in item and item[field] for field in date_fields):
+                                usable_items += 1
+                        
+                        logger.info("Found %d usable items out of %d total for %s (attempt %d)", 
+                                  usable_items, len(result), ticker, attempt_num)
+                        
+                        if usable_items > 0:
+                            logger.info("Successfully retrieved usable data for %s using %s", ticker, attempt["name"])
+                            return result
+                        else:
+                            logger.warning("No usable date fields found in response for %s (attempt %d)", ticker, attempt_num)
+                            if attempt_num < len(api_attempts):
+                                logger.info("Trying next API approach for %s", ticker)
+                                continue
+                    else:
+                        logger.warning("Empty or invalid result for %s (attempt %d)", ticker, attempt_num)
+                        if attempt_num < len(api_attempts):
+                            logger.info("Trying next API approach for %s", ticker)
+                            continue
+                    
+                    # If we get here and it's the last attempt, return whatever we got
+                    if attempt_num == len(api_attempts):
+                        logger.warning("Returning potentially empty result for %s after all attempts", ticker)
+                        return result or []
+                        
+            except Exception as e:
+                logger.error("Exception during API request for %s (attempt %d): %s", ticker, attempt_num, str(e))
+                if attempt_num < len(api_attempts):
+                    logger.info("Trying next API approach for %s due to exception", ticker)
+                    continue
+                else:
+                    logger.error("All API attempts failed for %s", ticker)
+                    raise
+    
+    # This should never be reached, but just in case
+    logger.error("Unexpected end of function for %s", ticker)
+    return []
 
 
 async def sync_watchlist(custom_store: BansheeStore | None = None) -> None:
@@ -241,6 +526,76 @@ async def sync_watchlist(custom_store: BansheeStore | None = None) -> None:
 async def daily_sync(_: str = Depends(validate_key)) -> dict[str, str]:
     await sync_watchlist()
     return {"status": "ok"}
+
+
+@app.post("/tasks/upcoming-sync")
+async def upcoming_sync(_: str = Depends(validate_key)) -> dict[str, str]:
+    """Refresh upcoming earnings calls and clean up stale data."""
+    logger = logging.getLogger(__name__)
+    logger.info("Starting comprehensive upcoming earnings sync")
+    
+    try:
+        # Get current ticker count for reference
+        current_tickers = set(store.list_tickers())
+        ticker_count = len(current_tickers)
+        logger.info("Current watchlist contains %d tickers: %s", ticker_count, list(current_tickers))
+        
+        # Refresh upcoming calls (this will fetch new data and create new calls/emails)
+        logger.info("Refreshing upcoming earnings calls from API")
+        await refresh_upcoming_calls(store, calls_bucket, email_bucket)
+        
+        # Clean up stale data that no longer corresponds to watchlist tickers
+        logger.info("Cleaning up stale calls and emails")
+        removed_calls = cleanup_calls_queue(calls_bucket, current_tickers)
+        removed_emails = cleanup_email_queue(email_bucket, current_tickers)
+        
+        # Clean up past/expired data to keep storage lean
+        logger.info("Cleaning up past calls and expired emails")
+        past_calls, past_emails = cleanup_past_data(calls_bucket, email_bucket)
+        
+        # Create detailed response message
+        cleanup_details = []
+        total_removed_calls = removed_calls + past_calls
+        total_removed_emails = removed_emails + past_emails
+        
+        if total_removed_calls > 0:
+            if removed_calls > 0 and past_calls > 0:
+                cleanup_details.append(f"removed {total_removed_calls} call(s) ({removed_calls} stale, {past_calls} past)")
+            elif removed_calls > 0:
+                cleanup_details.append(f"removed {removed_calls} stale call(s)")
+            else:
+                cleanup_details.append(f"removed {past_calls} past call(s)")
+                
+        if total_removed_emails > 0:
+            if removed_emails > 0 and past_emails > 0:
+                cleanup_details.append(f"removed {total_removed_emails} email(s) ({removed_emails} stale, {past_emails} expired)")
+            elif removed_emails > 0:
+                cleanup_details.append(f"removed {removed_emails} stale email(s)")
+            else:
+                cleanup_details.append(f"removed {past_emails} expired email(s)")
+            
+        if cleanup_details:
+            cleanup_msg = f" and {', '.join(cleanup_details)}"
+        else:
+            cleanup_msg = " (no cleanup needed)"
+            
+        success_message = f"Sync completed for {ticker_count} ticker(s){cleanup_msg}"
+        logger.info("Successfully completed upcoming earnings sync: %s", success_message)
+        
+        return {"status": "ok", "message": success_message}
+        
+    except Exception as e:
+        logger.error("Error during upcoming earnings sync: %s", str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to sync upcoming earnings: {str(e)}"
+        )
+
+
+@app.post("/tasks/send-queued-emails")
+def send_queued_emails(_: str = Depends(validate_key)) -> dict[str, str]:
+    send_due_emails(email_bucket)
+    return {"status": "sent"}
 
 
 LOGIN_HTML = """
@@ -518,6 +873,7 @@ WATCHLIST_HTML = """
       margin-bottom: 2rem;
       padding-bottom: 1.5rem;
       border-bottom: 2px solid rgba(102, 126, 234, 0.1);
+      position: relative;
     }
     .logo {
       display: inline-flex;
@@ -548,6 +904,167 @@ WATCHLIST_HTML = """
       color: #6b7280;
       font-size: 1rem;
       font-weight: 400;
+    }
+    .header-controls {
+      position: absolute;
+      top: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .progress-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      z-index: 1001;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .progress-container.active {
+      opacity: 1;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea, #764ba2, #10b981);
+      background-size: 300% 100%;
+      width: 0%;
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      animation: shimmer 2s ease-in-out infinite;
+      border-radius: 0 2px 2px 0;
+      box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+    }
+    @keyframes shimmer {
+      0% { background-position: 300% 0; }
+      100% { background-position: -300% 0; }
+    }
+    .refresh-btn {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      border: none;
+      padding: 0.875rem 1.25rem;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+    .refresh-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+    }
+    .refresh-btn:active {
+      transform: translateY(0);
+    }
+    .refresh-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .refresh-btn.loading {
+      background: linear-gradient(135deg, #6b7280, #4b5563);
+      box-shadow: 0 4px 15px rgba(107, 114, 128, 0.3);
+    }
+    .refresh-btn.loading i {
+      animation: spin 1s linear infinite;
+    }
+    .refresh-btn::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      transition: left 0.5s ease;
+    }
+    .refresh-btn:hover::before {
+      left: 100%;
+    }
+    .step-indicator {
+      position: fixed;
+      top: 50px;
+      right: 20px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      padding: 1rem;
+      border-radius: 12px;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      z-index: 1000;
+      opacity: 0;
+      transform: translateX(100%);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      min-width: 250px;
+    }
+    .step-indicator.active {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .step-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0;
+      transition: all 0.3s ease;
+    }
+    .step-icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      transition: all 0.3s ease;
+    }
+    .step-icon.pending {
+      background: #e5e7eb;
+      color: #9ca3af;
+    }
+    .step-icon.active {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .step-icon.completed {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+    }
+    .step-text {
+      flex: 1;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: color 0.3s ease;
+    }
+    .step-item.pending .step-text {
+      color: #9ca3af;
+    }
+    .step-item.active .step-text {
+      color: #667eea;
+      font-weight: 600;
+    }
+    .step-item.completed .step-text {
+      color: #10b981;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
     }
     .nav-tabs {
       display: flex;
@@ -597,8 +1114,10 @@ WATCHLIST_HTML = """
       border-radius: 16px;
       padding: 1.5rem;
       margin-bottom: 1.5rem;
-      text-align: center;
       backdrop-filter: blur(10px);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
     .stats {
       color: #667eea;
@@ -606,7 +1125,6 @@ WATCHLIST_HTML = """
       font-size: 1.1rem;
       display: flex;
       align-items: center;
-      justify-content: center;
       gap: 0.5rem;
     }
     .add-form {
@@ -966,6 +1484,40 @@ WATCHLIST_HTML = """
     
     /* Mobile-specific styles */
     @media (max-width: 768px) {
+      .header-controls {
+        position: relative;
+        top: auto;
+        right: auto;
+        justify-content: center;
+        margin-top: 1rem;
+      }
+      
+      .refresh-btn {
+        padding: 0.75rem 1rem;
+        font-size: 0.875rem;
+      }
+      
+      .step-indicator {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        transform: translateY(-100%);
+        min-width: auto;
+        max-width: none;
+      }
+      
+      .step-indicator.active {
+        transform: translateY(0);
+      }
+      
+      .step-item {
+        padding: 0.375rem 0;
+      }
+      
+      .step-text {
+        font-size: 0.8125rem;
+      }
+      
       .desktop-delete {
         display: none;
       }
@@ -1035,8 +1587,45 @@ WATCHLIST_HTML = """
   <meta name="twitter:card" content="summary_large_image">
 </head>
 <body>
+  <!-- Progress bar at the top -->
+  <div id="progress-container" class="progress-container">
+    <div id="progress-bar" class="progress-bar"></div>
+  </div>
+  
+  <!-- Step indicator -->
+  <div id="step-indicator" class="step-indicator">
+    <ul id="step-list" class="step-list">
+      <li class="step-item pending" id="step-1">
+        <div class="step-icon">1</div>
+        <div class="step-text">Preparing sync...</div>
+      </li>
+      <li class="step-item pending" id="step-2">
+        <div class="step-icon">2</div>
+        <div class="step-text">Fetching data...</div>
+      </li>
+      <li class="step-item pending" id="step-3">
+        <div class="step-icon">3</div>
+        <div class="step-text">Cleaning stale data...</div>
+      </li>
+      <li class="step-item pending" id="step-4">
+        <div class="step-icon">4</div>
+        <div class="step-text">Updating storage...</div>
+      </li>
+      <li class="step-item pending" id="step-5">
+        <div class="step-icon">5</div>
+        <div class="step-text">Refreshing display...</div>
+      </li>
+    </ul>
+  </div>
+
   <div class="container">
     <div class="header">
+      <div class="header-controls">
+        <button id="refresh-earnings-btn" class="refresh-btn" onclick="refreshUpcomingEarnings()">
+          <i class="fas fa-sync-alt"></i>
+          <span>Refresh Data</span>
+        </button>
+      </div>
       <div class="logo">
         <i class="fas fa-chart-line"></i>
       </div>
@@ -1141,7 +1730,12 @@ WATCHLIST_HTML = """
       document.getElementById(tabName + '-tab').classList.add('active');
       
       if (tabName === 'upcoming') {
-        loadUpcomingEarnings();
+        // Try to use authenticated endpoint, fall back to public
+        if (apiKey) {
+          loadUpcomingEarnings();
+        } else {
+          loadUpcomingEarningsPublic();
+        }
       }
     }
     
@@ -1183,47 +1777,10 @@ WATCHLIST_HTML = """
         const data = await resp.json();
         const tickers = data.tickers || [];
         
-        listEl.innerHTML = '';
-        updateStats(tickers.length);
+        // Cache the fresh data
+        localStorage.setItem('cached_watchlist', JSON.stringify(data));
         
-        if (tickers.length === 0) {
-          listEl.innerHTML = `
-            <div class="empty-state">
-              <div class="empty-icon">
-                <i class="fas fa-chart-line-down"></i>
-              </div>
-              <p>No tickers in your watchlist yet</p>
-              <small>Add some ticker symbols above to get started!</small>
-            </div>
-          `;
-        } else {
-          tickers.forEach(ticker => {
-            const li = document.createElement('li');
-            li.className = 'card';
-            li.innerHTML = `
-              <div class="ticker-item">
-                <div class="ticker-info">
-                  <div class="ticker-icon">${ticker.substring(0, 2).toUpperCase()}</div>
-                  <div>
-                    <div class="ticker-name">${ticker.toUpperCase()}</div>
-                    <small style="color: #6b7280;">Stock Symbol</small>
-                  </div>
-                </div>
-                <button class="delete-btn desktop-delete" onclick="deleteTicker('${ticker}')">
-                  <i class="fas fa-trash"></i>
-                  <span>Remove</span>
-                </button>
-                <div class="mobile-delete">
-                  <button class="delete-btn" onclick="deleteTicker('${ticker}')">
-                    <i class="fas fa-trash"></i>
-                    <span>Remove from Watchlist</span>
-                  </button>
-                </div>
-              </div>
-            `;
-            listEl.appendChild(li);
-          });
-        }
+        renderWatchlistData(tickers);
         
         loadingEl.style.display = 'none';
         listEl.style.display = 'block';
@@ -1234,6 +1791,101 @@ WATCHLIST_HTML = """
         loadingEl.style.display = 'none';
         listEl.style.display = 'block';
         updateStats(0);
+      }
+    }
+    
+    async function loadWatchlistPublic() {
+      const loadingEl = document.getElementById('loading');
+      const listEl = document.getElementById('watchlist');
+      
+      // Check for cached data first for instant loading
+      const cachedData = localStorage.getItem('cached_watchlist');
+      if (cachedData) {
+        try {
+          const data = JSON.parse(cachedData);
+          console.log('Using cached watchlist data:', data.tickers.length, 'tickers');
+          renderWatchlistData(data.tickers || []);
+        } catch (error) {
+          console.error('Error parsing cached watchlist data:', error);
+        }
+      }
+      
+      try {
+        loadingEl.style.display = 'flex';
+        listEl.style.display = 'none';
+        
+        // Use public endpoint that doesn't require authentication
+        const resp = await fetch('/public/watchlist');
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        }
+        
+        const data = await resp.json();
+        const tickers = data.tickers || [];
+        
+        // Cache the fresh data
+        localStorage.setItem('cached_watchlist', JSON.stringify(data));
+        
+        renderWatchlistData(tickers);
+        
+        loadingEl.style.display = 'none';
+        listEl.style.display = 'block';
+        
+      } catch (error) {
+        console.error('Error loading watchlist (public):', error);
+        // If we have cached data, don't show error
+        if (!cachedData) {
+          loadingEl.style.display = 'none';
+          listEl.style.display = 'block';
+          updateStats(0);
+        }
+      }
+    }
+    
+    function renderWatchlistData(tickers) {
+      const listEl = document.getElementById('watchlist');
+      
+      listEl.innerHTML = '';
+      updateStats(tickers.length);
+      
+      if (tickers.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fas fa-chart-line-down"></i>
+            </div>
+            <p>No tickers in your watchlist yet</p>
+            <small>Add some ticker symbols above to get started!</small>
+          </div>
+        `;
+      } else {
+        tickers.forEach(ticker => {
+          const li = document.createElement('li');
+          li.className = 'card';
+          li.innerHTML = `
+            <div class="ticker-item">
+              <div class="ticker-info">
+                <div class="ticker-icon">${ticker.substring(0, 2).toUpperCase()}</div>
+                <div>
+                  <div class="ticker-name">${ticker.toUpperCase()}</div>
+                  <small style="color: #6b7280;">Stock Symbol</small>
+                </div>
+              </div>
+              <button class="delete-btn desktop-delete" onclick="deleteTicker('${ticker}')">
+                <i class="fas fa-trash"></i>
+                <span>Remove</span>
+              </button>
+              <div class="mobile-delete">
+                <button class="delete-btn" onclick="deleteTicker('${ticker}')">
+                  <i class="fas fa-trash"></i>
+                  <span>Remove from Watchlist</span>
+                </button>
+              </div>
+            </div>
+          `;
+          listEl.appendChild(li);
+        });
       }
     }
     
@@ -1273,7 +1925,18 @@ WATCHLIST_HTML = """
         } else {
           calls.forEach((call, index) => {
             const callTime = new Date(call.call_time);
-            const timeString = callTime.toLocaleString();
+            // Convert to EST for display
+            const estOffset = -5; // EST is UTC-5
+            const callTimeEST = new Date(callTime.getTime() + (estOffset * 60 * 60 * 1000));
+            const timeString = callTimeEST.toLocaleString('en-US', {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              timeZone: 'America/New_York'
+            }) + ' EST';
             
             const li = document.createElement('li');
             li.className = 'card earnings-item';
@@ -1355,14 +2018,169 @@ WATCHLIST_HTML = """
       }
     }
     
+    async function loadUpcomingEarningsPublic() {
+      const loadingEl = document.getElementById('earnings-loading');
+      const listEl = document.getElementById('earnings-list');
+      
+      // Check for cached data first for instant loading
+      const cachedData = localStorage.getItem('cached_earnings');
+      if (cachedData) {
+        try {
+          const data = JSON.parse(cachedData);
+          console.log('Using cached earnings data:', data.total_count, 'calls');
+          renderEarningsData(data.calls || []);
+        } catch (error) {
+          console.error('Error parsing cached data:', error);
+        }
+      }
+      
+      try {
+        loadingEl.style.display = 'flex';
+        listEl.style.display = 'none';
+        
+        // Use public endpoint that doesn't require authentication
+        const resp = await fetch('/public/earnings/upcoming');
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        }
+        
+        const data = await resp.json();
+        const calls = data.calls || [];
+        
+        // Cache the fresh data
+        localStorage.setItem('cached_earnings', JSON.stringify(data));
+        
+        renderEarningsData(calls);
+        
+        loadingEl.style.display = 'none';
+        listEl.style.display = 'block';
+        
+      } catch (error) {
+        console.error('Error loading earnings (public):', error);
+        // If we have cached data, don't show error
+        if (!cachedData) {
+          loadingEl.style.display = 'none';
+          listEl.style.display = 'block';
+          updateEarningsStats(0);
+        }
+      }
+    }
+    
+    function renderEarningsData(calls) {
+      const listEl = document.getElementById('earnings-list');
+      currentEarningsData = calls;
+      
+      listEl.innerHTML = '';
+      updateEarningsStats(calls.length);
+      
+      if (calls.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fas fa-calendar-times"></i>
+            </div>
+            <p>No upcoming earnings calls found</p>
+            <small>Check back later for new earnings announcements</small>
+          </div>
+        `;
+      } else {
+        calls.forEach((call, index) => {
+          const callTime = new Date(call.call_time);
+          // Convert to EST for display
+          const estOffset = -5; // EST is UTC-5
+          const callTimeEST = new Date(callTime.getTime() + (estOffset * 60 * 60 * 1000));
+          const timeString = callTimeEST.toLocaleString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: 'America/New_York'
+          }) + ' EST';
+          
+          const li = document.createElement('li');
+          li.className = 'card earnings-item';
+          li.innerHTML = `
+            <div class="earnings-header" onclick="showCountdown(${index})">
+              <div class="earnings-ticker">
+                <div class="ticker-icon">${call.ticker.substring(0, 2).toUpperCase()}</div>
+                <div>
+                  <div class="ticker-name">${call.ticker.toUpperCase()}</div>
+                  <div class="earnings-time">
+                    <i class="fas fa-clock"></i>
+                    <span>${timeString}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="countdown" id="countdown-${index}">
+                <i class="fas fa-hourglass-half"></i>
+                <span>Loading...</span>
+              </div>
+            </div>
+            <div class="earnings-details" id="details-${index}">
+              <div class="earnings-info">
+                ${call.estimated_eps ? `
+                  <div class="info-item">
+                    <div class="info-label">
+                      <i class="fas fa-chart-bar"></i>
+                      Est. EPS
+                    </div>
+                    <div class="info-value">$${call.estimated_eps}</div>
+                  </div>
+                ` : ''}
+                ${call.estimated_revenue ? `
+                  <div class="info-item">
+                    <div class="info-label">
+                      <i class="fas fa-dollar-sign"></i>
+                      Est. Revenue
+                    </div>
+                    <div class="info-value">$${(call.estimated_revenue / 1000000).toFixed(0)}M</div>
+                  </div>
+                ` : ''}
+                ${call.actual_eps ? `
+                  <div class="info-item">
+                    <div class="info-label">
+                      <i class="fas fa-chart-line"></i>
+                      Actual EPS
+                    </div>
+                    <div class="info-value">$${call.actual_eps}</div>
+                  </div>
+                ` : ''}
+                ${call.actual_revenue ? `
+                  <div class="info-item">
+                    <div class="info-label">
+                      <i class="fas fa-money-bill-wave"></i>
+                      Actual Revenue
+                    </div>
+                    <div class="info-value">$${(call.actual_revenue / 1000000).toFixed(0)}M</div>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          `;
+          listEl.appendChild(li);
+        });
+        
+        // Start countdown timers
+        updateCountdowns();
+        setInterval(updateCountdowns, 100); // Update every 100ms for millisecond precision
+      }
+    }
+    
     function updateCountdowns() {
       if (!currentEarningsData) return;
       
+      // Get current time in EST
       const now = new Date();
+      const estOffset = -5; // EST is UTC-5 (ignoring DST for simplicity)
+      const nowEST = new Date(now.getTime() + (estOffset * 60 * 60 * 1000));
       
       currentEarningsData.forEach((call, index) => {
+        // Convert call time to EST
         const callTime = new Date(call.call_time);
-        const diff = callTime - now;
+        const callTimeEST = new Date(callTime.getTime() + (estOffset * 60 * 60 * 1000));
         
         const countdownEl = document.getElementById(`countdown-${index}`);
         if (!countdownEl) return;
@@ -1370,34 +2188,68 @@ WATCHLIST_HTML = """
         const iconEl = countdownEl.querySelector('i');
         const textEl = countdownEl.querySelector('span');
         
-        if (diff <= 0) {
+        // Check if the call is live or past
+        if (callTimeEST <= nowEST) {
           iconEl.className = 'fas fa-broadcast-tower';
           textEl.textContent = 'LIVE NOW';
           countdownEl.className = 'countdown urgent';
           return;
         }
         
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        const milliseconds = Math.floor((diff % 1000) / 10); // Show centiseconds
+        // Calculate time difference
+        const diffMs = callTimeEST - nowEST;
+        
+        // Calculate months, days, hours, minutes, seconds
+        const msPerSecond = 1000;
+        const msPerMinute = msPerSecond * 60;
+        const msPerHour = msPerMinute * 60;
+        const msPerDay = msPerHour * 24;
+        const msPerMonth = msPerDay * 30.44; // Average days per month
+        
+        const months = Math.floor(diffMs / msPerMonth);
+        const days = Math.floor((diffMs % msPerMonth) / msPerDay);
+        const hours = Math.floor((diffMs % msPerDay) / msPerHour);
+        const minutes = Math.floor((diffMs % msPerHour) / msPerMinute);
+        const seconds = Math.floor((diffMs % msPerMinute) / msPerSecond);
         
         let countdownText = '';
-        if (days > 0) {
-          countdownText = `${days}d ${hours}h ${minutes}m`;
-          countdownEl.className = 'countdown normal';
-          iconEl.className = 'fas fa-calendar-day';
+        let className = 'countdown normal';
+        let iconClass = 'fas fa-calendar-day';
+        
+        if (months > 0) {
+          if (days > 0) {
+            countdownText = `${months}mo ${days}d`;
+          } else {
+            countdownText = `${months} month${months > 1 ? 's' : ''}`;
+          }
+          className = 'countdown normal';
+          iconClass = 'fas fa-calendar-alt';
+        } else if (days > 7) {
+          const weeks = Math.floor(days / 7);
+          const remainingDays = days % 7;
+          if (remainingDays > 0) {
+            countdownText = `${weeks}w ${remainingDays}d`;
+          } else {
+            countdownText = `${weeks} week${weeks > 1 ? 's' : ''}`;
+          }
+          className = 'countdown normal';
+          iconClass = 'fas fa-calendar-week';
+        } else if (days > 0) {
+          countdownText = `${days}d ${hours}h`;
+          className = 'countdown soon';
+          iconClass = 'fas fa-calendar-day';
         } else if (hours > 0) {
-          countdownText = `${hours}h ${minutes}m ${seconds}s`;
-          countdownEl.className = 'countdown soon';
-          iconEl.className = 'fas fa-clock';
+          countdownText = `${hours}h ${minutes}m`;
+          className = 'countdown urgent';
+          iconClass = 'fas fa-clock';
         } else {
-          countdownText = `${minutes}m ${seconds}.${milliseconds.toString().padStart(2, '0')}s`;
-          countdownEl.className = 'countdown urgent';
-          iconEl.className = 'fas fa-stopwatch';
+          countdownText = `${minutes}m ${seconds}s`;
+          className = 'countdown urgent';
+          iconClass = 'fas fa-stopwatch';
         }
         
+        countdownEl.className = className;
+        iconEl.className = iconClass;
         textEl.textContent = countdownText;
       });
     }
@@ -1414,26 +2266,44 @@ WATCHLIST_HTML = """
       // Start modal countdown
       if (countdownInterval) clearInterval(countdownInterval);
       countdownInterval = setInterval(() => {
+        // Get current time in EST
         const now = new Date();
+        const estOffset = -5; // EST is UTC-5 (ignoring DST for simplicity)
+        const nowEST = new Date(now.getTime() + (estOffset * 60 * 60 * 1000));
+        
+        // Convert call time to EST
         const callTime = new Date(call.call_time);
-        const diff = callTime - now;
+        const callTimeEST = new Date(callTime.getTime() + (estOffset * 60 * 60 * 1000));
+        
+        const diffMs = callTimeEST - nowEST;
         
         const modalCountdownEl = document.getElementById('modal-countdown');
         
-        if (diff <= 0) {
+        if (diffMs <= 0) {
           modalCountdownEl.innerHTML = '🚨 EARNINGS CALL IS LIVE! 🚨';
           modalCountdownEl.style.color = '#dc2626';
           return;
         }
         
-        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-        const milliseconds = diff % 1000;
+        // Calculate time components
+        const msPerSecond = 1000;
+        const msPerMinute = msPerSecond * 60;
+        const msPerHour = msPerMinute * 60;
+        const msPerDay = msPerHour * 24;
+        const msPerMonth = msPerDay * 30.44; // Average days per month
+        
+        const months = Math.floor(diffMs / msPerMonth);
+        const days = Math.floor((diffMs % msPerMonth) / msPerDay);
+        const hours = Math.floor((diffMs % msPerDay) / msPerHour);
+        const minutes = Math.floor((diffMs % msPerHour) / msPerMinute);
+        const seconds = Math.floor((diffMs % msPerMinute) / msPerSecond);
+        const milliseconds = diffMs % 1000;
         
         let countdownText = '';
-        if (days > 0) {
+        
+        if (months > 0) {
+          countdownText = `${months}mo ${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        } else if (days > 0) {
           countdownText = `${days}d ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
         } else {
           countdownText = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
@@ -1441,11 +2311,13 @@ WATCHLIST_HTML = """
         
         modalCountdownEl.textContent = countdownText;
         
-        // Color coding
-        if (diff < 60000) { // Less than 1 minute
+        // Color coding based on time remaining
+        if (diffMs < 60000) { // Less than 1 minute
           modalCountdownEl.style.color = '#dc2626';
-        } else if (diff < 3600000) { // Less than 1 hour
+        } else if (diffMs < 3600000) { // Less than 1 hour
           modalCountdownEl.style.color = '#d97706';
+        } else if (diffMs < 86400000) { // Less than 1 day
+          modalCountdownEl.style.color = '#059669';
         } else {
           modalCountdownEl.style.color = '#667eea';
         }
@@ -1453,13 +2325,28 @@ WATCHLIST_HTML = """
       
       // Populate modal info
       const modalInfo = document.getElementById('modal-info');
+      
+      // Convert call time to EST for display
+      const callTime = new Date(call.call_time);
+      const estOffset = -5; // EST is UTC-5
+      const callTimeEST = new Date(callTime.getTime() + (estOffset * 60 * 60 * 1000));
+      const callTimeESTString = callTimeEST.toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'America/New_York'
+      }) + ' EST';
+      
       modalInfo.innerHTML = `
         <div class="info-item">
           <div class="info-label">
             <i class="fas fa-calendar-alt"></i>
-            Date & Time
+            Date & Time (EST)
           </div>
-          <div class="info-value">${new Date(call.call_time).toLocaleString()}</div>
+          <div class="info-value">${callTimeESTString}</div>
         </div>
         <div class="info-item">
           <div class="info-label">
@@ -1535,11 +2422,15 @@ WATCHLIST_HTML = """
         });
         
         if (!resp.ok) {
-          throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+          const errorData = await resp.json();
+          throw new Error(errorData.detail || `HTTP ${resp.status}: ${resp.statusText}`);
         }
         
-        showMessage(`${ticker.toUpperCase()} removed from watchlist`, 'success', 'fas fa-check-circle');
-        loadWatchlist();
+        const result = await resp.json();
+        showMessage(result.message || `${ticker.toUpperCase()} removed from watchlist`, 'success', 'fas fa-check-circle');
+        
+        // Automatically trigger the full refresh process with UI feedback
+        await refreshUpcomingEarnings();
         
       } catch (error) {
         console.error('Error deleting ticker:', error);
@@ -1590,7 +2481,214 @@ WATCHLIST_HTML = """
     });
     
     // Load watchlist on page load
-    loadWatchlist();
+    loadWatchlistPublic();
+    
+    // Load upcoming earnings immediately (public endpoint)
+    loadUpcomingEarningsPublic();
+    
+    // Progress and step management
+    let currentStep = 0;
+    const totalSteps = 5;
+    
+    function showProgress() {
+      const progressContainer = document.getElementById('progress-container');
+      const stepIndicator = document.getElementById('step-indicator');
+      
+      progressContainer.classList.add('active');
+      stepIndicator.classList.add('active');
+      
+      // Reset all steps
+      for (let i = 1; i <= totalSteps; i++) {
+        const step = document.getElementById(`step-${i}`);
+        step.className = 'step-item pending';
+        const icon = step.querySelector('.step-icon');
+        icon.textContent = i;
+      }
+      currentStep = 0;
+      updateProgressBar(0);
+    }
+    
+    function hideProgress() {
+      const progressContainer = document.getElementById('progress-container');
+      const stepIndicator = document.getElementById('step-indicator');
+      
+      setTimeout(() => {
+        progressContainer.classList.remove('active');
+        stepIndicator.classList.remove('active');
+      }, 500);
+    }
+    
+    function updateProgressBar(percentage) {
+      const progressBar = document.getElementById('progress-bar');
+      progressBar.style.width = `${percentage}%`;
+    }
+    
+    function setStepActive(stepNumber, text = null) {
+      if (currentStep > 0) {
+        // Mark previous step as completed
+        const prevStep = document.getElementById(`step-${currentStep}`);
+        prevStep.className = 'step-item completed';
+        const prevIcon = prevStep.querySelector('.step-icon');
+        prevIcon.innerHTML = '<i class="fas fa-check"></i>';
+      }
+      
+      currentStep = stepNumber;
+      const step = document.getElementById(`step-${stepNumber}`);
+      step.className = 'step-item active';
+      
+      if (text) {
+        const stepText = step.querySelector('.step-text');
+        stepText.textContent = text;
+      }
+      
+      // Update progress bar smoothly
+      const percentage = ((stepNumber - 1) / totalSteps) * 100 + (100 / totalSteps) * 0.5;
+      updateProgressBar(percentage);
+    }
+    
+    function completeStep(stepNumber, text = null) {
+      const step = document.getElementById(`step-${stepNumber}`);
+      step.className = 'step-item completed';
+      const icon = step.querySelector('.step-icon');
+      icon.innerHTML = '<i class="fas fa-check"></i>';
+      
+      if (text) {
+        const stepText = step.querySelector('.step-text');
+        stepText.textContent = text;
+      }
+      
+      // Update progress bar to full for this step
+      const percentage = (stepNumber / totalSteps) * 100;
+      updateProgressBar(percentage);
+    }
+    
+    async function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    async function refreshUpcomingEarnings() {
+      const refreshBtn = document.getElementById('refresh-earnings-btn');
+      const btnIcon = refreshBtn.querySelector('i');
+      const btnText = refreshBtn.querySelector('span');
+      
+      try {
+        // Show loading state
+        refreshBtn.disabled = true;
+        refreshBtn.classList.add('loading');
+        btnText.textContent = 'Refreshing...';
+        
+        // Show progress tracking
+        showProgress();
+        
+        // Step 1: Preparing sync
+        setStepActive(1, 'Initializing refresh process...');
+        await delay(300);
+        
+        showMessage('Starting comprehensive data refresh...', 'success', 'fas fa-sync-alt');
+        
+        // Get current watchlist to show which companies are being processed
+        let watchlistTickers = [];
+        try {
+          const watchlistResp = await fetch(apiKey ? '/watchlist' : '/public/watchlist', {
+            headers: apiKey ? {'X-API-Key': apiKey} : {}
+          });
+          if (watchlistResp.ok) {
+            const watchlistData = await watchlistResp.json();
+            watchlistTickers = watchlistData.tickers || [];
+          }
+        } catch (error) {
+          console.log('Could not fetch watchlist for display:', error);
+        }
+        
+        // Create company list for display
+        const companyList = watchlistTickers.length > 0 
+          ? watchlistTickers.slice(0, 3).map(t => t.toUpperCase()).join(', ') + 
+            (watchlistTickers.length > 3 ? ` +${watchlistTickers.length - 3} more` : '')
+          : 'tracked companies';
+        
+        // Step 2: Fetching data
+        setStepActive(2, `Fetching latest earnings data for ${companyList}...`);
+        await delay(200);
+        
+        // Call the refresh endpoint (requires authentication)
+        const resp = await fetch('/tasks/upcoming-sync', {
+          method: 'POST',
+          headers: {'X-API-Key': apiKey}
+        });
+        
+        await delay(400); // Simulate processing time for smooth UX
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        }
+        
+        completeStep(2, 'Data fetched successfully');
+        
+        // Step 3: Cleaning stale data
+        setStepActive(3, `Cleaning stale data for ${companyList}...`);
+        await delay(300);
+        
+        const result = await resp.json();
+        
+        completeStep(3, 'Cleanup completed');
+        
+        // Step 4: Updating storage
+        setStepActive(4, 'Updating data storage...');
+        await delay(250);
+        
+        completeStep(4, 'Storage updated');
+        
+        // Step 5: Refreshing display
+        setStepActive(5, 'Refreshing dashboard...');
+        await delay(200);
+        
+        // Reload the earnings data (use authenticated endpoint after refresh)
+        loadUpcomingEarnings();
+        
+        // Also refresh watchlist in case tickers were added/removed
+        if (apiKey) {
+          loadWatchlist();
+        } else {
+          loadWatchlistPublic();
+        }
+        
+        await delay(300);
+        
+        completeStep(5, 'Dashboard refreshed');
+        
+        // Show the detailed message from the backend
+        const message = result.message || 'Data refresh completed successfully!';
+        showMessage(message, 'success', 'fas fa-check-circle');
+        
+        // Complete progress bar
+        updateProgressBar(100);
+        await delay(500);
+        
+      } catch (error) {
+        console.error('Error refreshing earnings:', error);
+        showMessage(`Error refreshing data: ${error.message}`, 'error');
+        
+        // Mark current step as failed
+        if (currentStep > 0) {
+          const step = document.getElementById(`step-${currentStep}`);
+          step.className = 'step-item pending';
+          const icon = step.querySelector('.step-icon');
+          icon.innerHTML = '<i class="fas fa-times"></i>';
+          icon.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+          const stepText = step.querySelector('.step-text');
+          stepText.textContent = 'Failed - ' + error.message;
+          stepText.style.color = '#ef4444';
+        }
+      } finally {
+        // Restore button state
+        refreshBtn.disabled = false;
+        refreshBtn.classList.remove('loading');
+        btnText.textContent = 'Refresh Data';
+        
+        // Hide progress after a delay
+        setTimeout(hideProgress, 1500);
+      }
+    }
   </script>
 </body>
 </html>
@@ -1602,7 +2700,41 @@ def watchlist_page(request: Request):
     """Show the watchlist page or login form."""
     session_id = request.cookies.get("banshee_session")
     if session_id not in authenticated_sessions:
-        return HTMLResponse(content=LOGIN_HTML.replace("{error}", ""))
+        # Show login form with immediate earnings data loading
+        login_with_data = LOGIN_HTML.replace("{error}", "") + """
+<script>
+// Load upcoming earnings and watchlist data immediately on the login page
+async function loadLoginPageData() {
+  try {
+    // Load earnings data
+    const earningsResp = await fetch('/public/earnings/upcoming');
+    if (earningsResp.ok) {
+      const earningsData = await earningsResp.json();
+      console.log('Loaded earnings data on login page:', earningsData.total_count, 'calls');
+      if (earningsData.calls && earningsData.calls.length > 0) {
+        localStorage.setItem('cached_earnings', JSON.stringify(earningsData));
+      }
+    }
     
+    // Load watchlist data
+    const watchlistResp = await fetch('/public/watchlist');
+    if (watchlistResp.ok) {
+      const watchlistData = await watchlistResp.json();
+      console.log('Loaded watchlist data on login page:', watchlistData.tickers.length, 'tickers');
+      if (watchlistData.tickers && watchlistData.tickers.length > 0) {
+        localStorage.setItem('cached_watchlist', JSON.stringify(watchlistData));
+      }
+    }
+  } catch (error) {
+    console.log('Could not preload data:', error);
+  }
+}
+
+// Load data immediately
+loadLoginPageData();
+</script>
+"""
+        return HTMLResponse(content=login_with_data)
+
     api_key = get_setting("BANSHEE_API_KEY")
     return WATCHLIST_HTML.replace("{api_key}", api_key)
