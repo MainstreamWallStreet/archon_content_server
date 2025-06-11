@@ -4,23 +4,25 @@
 ## [2025-01-10] - Instant Earnings Data Loading
 ### Added
 - **Public Earnings Endpoint**: New `/public/earnings/upcoming` endpoint that provides upcoming earnings data without authentication
-- **Immediate Data Loading**: Website now loads upcoming earnings calls asynchronously when first rendered, even before user authentication
-- **Smart Caching**: Earnings data is cached in localStorage for instant display on subsequent visits
+- **Public Watchlist Endpoint**: New `/public/watchlist` endpoint that provides current watchlist data without authentication
+- **Immediate Data Loading**: Website now loads both upcoming earnings calls and watchlist data asynchronously when first rendered, even before user authentication
+- **Smart Caching**: Both earnings and watchlist data are cached in localStorage for instant display on subsequent visits
 - **Seamless Experience**: Data is pre-loaded on login page and immediately available when user accesses dashboard
 
 ### Changed
-- **Enhanced User Experience**: Users can now see upcoming earnings calls immediately upon visiting the site, without waiting for login
+- **Enhanced User Experience**: Users can now see both upcoming earnings calls and current watchlist immediately upon visiting the site, without waiting for login
 - **Optimized Loading Strategy**: 
-  - Login page: Preloads and caches earnings data in background
+  - Login page: Preloads and caches both earnings and watchlist data in background
   - Dashboard: Displays cached data instantly, then refreshes with fresh data
-  - Authenticated users: Still use secured endpoints for data modification operations
+  - Authenticated users: Still use secured endpoints for data modification operations (add/remove tickers, refresh data)
 - **Dual Endpoint Strategy**: Maintains both public (read-only) and authenticated (full-access) endpoints for optimal security and performance
 
 ### Technical
-- Public endpoint mirrors authenticated endpoint functionality but without API key requirement
+- Public endpoints mirror authenticated endpoint functionality but without API key requirement
 - Intelligent fallback system: tries authenticated endpoint first for logged-in users, falls back to public for unauthenticated access
 - Data consistency maintained between public and authenticated endpoints
 - Zero-downtime experience with cached data and background refresh
+- Watchlist modifications (add/remove tickers) still require authentication and use secured endpoints
 
 ## [2025-01-10] - API Ninjas Integration Optimization
 ### Changed

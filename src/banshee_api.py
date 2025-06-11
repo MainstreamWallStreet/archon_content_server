@@ -123,6 +123,12 @@ def read_watchlist(_: str = Depends(validate_key)) -> dict[str, List[str]]:
     return {"tickers": store.list_tickers()}
 
 
+@app.get("/public/watchlist")
+def read_watchlist_public() -> dict[str, List[str]]:
+    """Get the current watchlist - public endpoint."""
+    return {"tickers": store.list_tickers()}
+
+
 @app.post("/watchlist")
 async def create_watchlist(
     payload: TickerPayload, _: str = Depends(validate_key)
@@ -1422,47 +1428,10 @@ WATCHLIST_HTML = """
         const data = await resp.json();
         const tickers = data.tickers || [];
         
-        listEl.innerHTML = '';
-        updateStats(tickers.length);
+        // Cache the fresh data
+        localStorage.setItem('cached_watchlist', JSON.stringify(data));
         
-        if (tickers.length === 0) {
-          listEl.innerHTML = `
-            <div class="empty-state">
-              <div class="empty-icon">
-                <i class="fas fa-chart-line-down"></i>
-              </div>
-              <p>No tickers in your watchlist yet</p>
-              <small>Add some ticker symbols above to get started!</small>
-            </div>
-          `;
-        } else {
-          tickers.forEach(ticker => {
-            const li = document.createElement('li');
-            li.className = 'card';
-            li.innerHTML = `
-              <div class="ticker-item">
-                <div class="ticker-info">
-                  <div class="ticker-icon">${ticker.substring(0, 2).toUpperCase()}</div>
-                  <div>
-                    <div class="ticker-name">${ticker.toUpperCase()}</div>
-                    <small style="color: #6b7280;">Stock Symbol</small>
-                  </div>
-                </div>
-                <button class="delete-btn desktop-delete" onclick="deleteTicker('${ticker}')">
-                  <i class="fas fa-trash"></i>
-                  <span>Remove</span>
-                </button>
-                <div class="mobile-delete">
-                  <button class="delete-btn" onclick="deleteTicker('${ticker}')">
-                    <i class="fas fa-trash"></i>
-                    <span>Remove from Watchlist</span>
-                  </button>
-                </div>
-              </div>
-            `;
-            listEl.appendChild(li);
-          });
-        }
+        renderWatchlistData(tickers);
         
         loadingEl.style.display = 'none';
         listEl.style.display = 'block';
@@ -1473,6 +1442,101 @@ WATCHLIST_HTML = """
         loadingEl.style.display = 'none';
         listEl.style.display = 'block';
         updateStats(0);
+      }
+    }
+    
+    async function loadWatchlistPublic() {
+      const loadingEl = document.getElementById('loading');
+      const listEl = document.getElementById('watchlist');
+      
+      // Check for cached data first for instant loading
+      const cachedData = localStorage.getItem('cached_watchlist');
+      if (cachedData) {
+        try {
+          const data = JSON.parse(cachedData);
+          console.log('Using cached watchlist data:', data.tickers.length, 'tickers');
+          renderWatchlistData(data.tickers || []);
+        } catch (error) {
+          console.error('Error parsing cached watchlist data:', error);
+        }
+      }
+      
+      try {
+        loadingEl.style.display = 'flex';
+        listEl.style.display = 'none';
+        
+        // Use public endpoint that doesn't require authentication
+        const resp = await fetch('/public/watchlist');
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        }
+        
+        const data = await resp.json();
+        const tickers = data.tickers || [];
+        
+        // Cache the fresh data
+        localStorage.setItem('cached_watchlist', JSON.stringify(data));
+        
+        renderWatchlistData(tickers);
+        
+        loadingEl.style.display = 'none';
+        listEl.style.display = 'block';
+        
+      } catch (error) {
+        console.error('Error loading watchlist (public):', error);
+        // If we have cached data, don't show error
+        if (!cachedData) {
+          loadingEl.style.display = 'none';
+          listEl.style.display = 'block';
+          updateStats(0);
+        }
+      }
+    }
+    
+    function renderWatchlistData(tickers) {
+      const listEl = document.getElementById('watchlist');
+      
+      listEl.innerHTML = '';
+      updateStats(tickers.length);
+      
+      if (tickers.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fas fa-chart-line-down"></i>
+            </div>
+            <p>No tickers in your watchlist yet</p>
+            <small>Add some ticker symbols above to get started!</small>
+          </div>
+        `;
+      } else {
+        tickers.forEach(ticker => {
+          const li = document.createElement('li');
+          li.className = 'card';
+          li.innerHTML = `
+            <div class="ticker-item">
+              <div class="ticker-info">
+                <div class="ticker-icon">${ticker.substring(0, 2).toUpperCase()}</div>
+                <div>
+                  <div class="ticker-name">${ticker.toUpperCase()}</div>
+                  <small style="color: #6b7280;">Stock Symbol</small>
+                </div>
+              </div>
+              <button class="delete-btn desktop-delete" onclick="deleteTicker('${ticker}')">
+                <i class="fas fa-trash"></i>
+                <span>Remove</span>
+              </button>
+              <div class="mobile-delete">
+                <button class="delete-btn" onclick="deleteTicker('${ticker}')">
+                  <i class="fas fa-trash"></i>
+                  <span>Remove from Watchlist</span>
+                </button>
+              </div>
+            </div>
+          `;
+          listEl.appendChild(li);
+        });
       }
     }
     
@@ -2064,7 +2128,7 @@ WATCHLIST_HTML = """
     });
     
     // Load watchlist on page load
-    loadWatchlist();
+    loadWatchlistPublic();
     
     // Load upcoming earnings immediately (public endpoint)
     loadUpcomingEarningsPublic();
@@ -2122,25 +2186,35 @@ def watchlist_page(request: Request):
         # Show login form with immediate earnings data loading
         login_with_data = LOGIN_HTML.replace("{error}", "") + """
 <script>
-// Load upcoming earnings data immediately on the login page
-async function loadLoginPageEarnings() {
+// Load upcoming earnings and watchlist data immediately on the login page
+async function loadLoginPageData() {
   try {
-    const resp = await fetch('/public/earnings/upcoming');
-    if (resp.ok) {
-      const data = await resp.json();
-      console.log('Loaded earnings data on login page:', data.total_count, 'calls');
-      // Store data for when user logs in
-      if (data.calls && data.calls.length > 0) {
-        localStorage.setItem('cached_earnings', JSON.stringify(data));
+    // Load earnings data
+    const earningsResp = await fetch('/public/earnings/upcoming');
+    if (earningsResp.ok) {
+      const earningsData = await earningsResp.json();
+      console.log('Loaded earnings data on login page:', earningsData.total_count, 'calls');
+      if (earningsData.calls && earningsData.calls.length > 0) {
+        localStorage.setItem('cached_earnings', JSON.stringify(earningsData));
+      }
+    }
+    
+    // Load watchlist data
+    const watchlistResp = await fetch('/public/watchlist');
+    if (watchlistResp.ok) {
+      const watchlistData = await watchlistResp.json();
+      console.log('Loaded watchlist data on login page:', watchlistData.tickers.length, 'tickers');
+      if (watchlistData.tickers && watchlistData.tickers.length > 0) {
+        localStorage.setItem('cached_watchlist', JSON.stringify(watchlistData));
       }
     }
   } catch (error) {
-    console.log('Could not preload earnings data:', error);
+    console.log('Could not preload data:', error);
   }
 }
 
 // Load data immediately
-loadLoginPageEarnings();
+loadLoginPageData();
 </script>
 """
         return HTMLResponse(content=login_with_data)
