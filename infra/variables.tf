@@ -60,6 +60,16 @@ variable "web_password" {
   sensitive   = true
 }
 
+variable "earnings_bucket" {
+  description = "Bucket for upcoming earnings data"
+  type        = string
+}
+
+variable "email_queue_bucket" {
+  description = "Bucket for queued emails"
+  type        = string
+}
+
 variable "alert_recipients" {
   description = "List of email addresses to receive alerts"
   type        = list(string)

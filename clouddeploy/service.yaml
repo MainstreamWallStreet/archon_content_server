@@ -34,6 +34,10 @@ spec:
               value: "banshee-data"
             - name: BANSHEE_DATA_BUCKET
               value: "banshee-data"
+            - name: EARNINGS_BUCKET
+              value: "banshee-earnings"
+            - name: EMAIL_QUEUE_BUCKET
+              value: "banshee-email-queue"
             - name: ENV
               value: "production"
             

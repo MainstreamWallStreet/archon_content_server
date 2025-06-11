@@ -15,6 +15,12 @@ from src.notifications import send_alert
 
 from src.config import get_setting
 from src.banshee_watchlist import BansheeStore
+from src.earnings_alerts import (
+    GcsBucket,
+    refresh_upcoming_calls,
+    cleanup_email_queue,
+    send_due_emails,
+)
 
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key")
 
@@ -27,6 +33,8 @@ def validate_key(api_key: str = Security(API_KEY_HEADER)) -> str:
 
 
 store = BansheeStore(get_setting("BANSHEE_DATA_BUCKET"))
+calls_bucket = GcsBucket(get_setting("EARNINGS_BUCKET"))
+email_bucket = GcsBucket(get_setting("EMAIL_QUEUE_BUCKET"))
 app = FastAPI(title="Banshee API", version="1.0")
 
 # Serve static files (for logo, etc.)
@@ -58,6 +66,7 @@ class AlertPayload(BaseModel):
 
 class EarningsCall(BaseModel):
     """Data model for an earnings call event."""
+
     ticker: str
     call_date: str  # YYYY-MM-DD format
     call_time: str  # ISO 8601 datetime string
@@ -70,6 +79,7 @@ class EarningsCall(BaseModel):
 
 class UpcomingCallsResponse(BaseModel):
     """Response model for upcoming earnings calls."""
+
     calls: List[EarningsCall]
     total_count: int
     next_call: EarningsCall | None = None
@@ -86,13 +96,20 @@ def web_login(password: str = Form(...)):
     """Simple password-based login for web interface."""
     expected_password = get_setting("BANSHEE_WEB_PASSWORD")
     if not secrets.compare_digest(password, expected_password):
-        return HTMLResponse(content=LOGIN_HTML.replace("{error}", "<div class='error'><i class='fas fa-exclamation-triangle'></i>Invalid password. Please try again.</div>"), status_code=401)
-    
+        return HTMLResponse(
+            content=LOGIN_HTML.replace(
+                "{error}",
+                "<div class='error'><i class='fas fa-exclamation-triangle'></i>Invalid password. Please try again.</div>",
+            ),
+            status_code=401,
+        )
+
     # Create a simple session token
     import uuid
+
     session_id = str(uuid.uuid4())
     authenticated_sessions.add(session_id)
-    
+
     # Redirect to main page with session cookie
     response = RedirectResponse(url="/web", status_code=302)
     response.set_cookie("banshee_session", session_id, max_age=3600 * 24)  # 24 hours
@@ -105,25 +122,30 @@ def read_watchlist(_: str = Depends(validate_key)) -> dict[str, List[str]]:
 
 
 @app.post("/watchlist")
-def create_watchlist(
+async def create_watchlist(
     payload: TickerPayload, _: str = Depends(validate_key)
 ) -> dict[str, str]:
     store.add_ticker(payload.ticker, payload.user)
+    await refresh_upcoming_calls(store, calls_bucket, email_bucket)
+    cleanup_email_queue(email_bucket, set(store.list_tickers()))
     return {"message": "added"}
 
 
 @app.delete("/watchlist/{ticker}")
 def delete_watchlist(ticker: str, _: str = Depends(validate_key)) -> dict[str, str]:
     store.remove_ticker(ticker)
+    cleanup_email_queue(email_bucket, set(store.list_tickers()))
     return {"message": "removed"}
 
 
 @app.get("/earnings/upcoming")
-async def get_upcoming_earnings(_: str = Depends(validate_key)) -> UpcomingCallsResponse:
+async def get_upcoming_earnings(
+    _: str = Depends(validate_key),
+) -> UpcomingCallsResponse:
     """Get upcoming earnings calls for all watchlist tickers."""
     calls = []
     tickers = store.list_tickers()
-    
+
     for ticker in tickers:
         try:
             # Fetch data with show_upcoming=true to get future earnings
@@ -138,39 +160,40 @@ async def get_upcoming_earnings(_: str = Depends(validate_key)) -> UpcomingCalls
                         actual_eps=item.get("actual_eps"),
                         estimated_eps=item.get("estimated_eps"),
                         actual_revenue=item.get("actual_revenue"),
-                        estimated_revenue=item.get("estimated_revenue")
+                        estimated_revenue=item.get("estimated_revenue"),
                     )
                     calls.append(call)
         except Exception as e:
             # Skip failed tickers but log the error
             print(f"Error fetching earnings for {ticker}: {e}")
             continue
-    
+
     # Sort by call time
     calls.sort(key=lambda x: x.call_time)
-    
+
     # Filter to only future calls
     now = datetime.now(timezone.utc)
     future_calls = [
-        call for call in calls 
-        if datetime.fromisoformat(call.call_time.replace('Z', '+00:00')) > now
+        call
+        for call in calls
+        if datetime.fromisoformat(call.call_time.replace("Z", "+00:00")) > now
     ]
-    
+
     next_call = future_calls[0] if future_calls else None
-    
+
     return UpcomingCallsResponse(
-        calls=future_calls,
-        total_count=len(future_calls),
-        next_call=next_call
+        calls=future_calls, total_count=len(future_calls), next_call=next_call
     )
 
 
 @app.get("/earnings/{ticker}")
-async def get_ticker_earnings(ticker: str, _: str = Depends(validate_key)) -> List[EarningsCall]:
+async def get_ticker_earnings(
+    ticker: str, _: str = Depends(validate_key)
+) -> List[EarningsCall]:
     """Get earnings calls for a specific ticker."""
     data = await _fetch_api_ninjas_upcoming(ticker)
     calls = []
-    
+
     for item in data:
         if "earnings_date" in item:
             call = EarningsCall(
@@ -181,10 +204,10 @@ async def get_ticker_earnings(ticker: str, _: str = Depends(validate_key)) -> Li
                 actual_eps=item.get("actual_eps"),
                 estimated_eps=item.get("estimated_eps"),
                 actual_revenue=item.get("actual_revenue"),
-                estimated_revenue=item.get("estimated_revenue")
+                estimated_revenue=item.get("estimated_revenue"),
             )
             calls.append(call)
-    
+
     # Sort by call time
     calls.sort(key=lambda x: x.call_time)
     return calls
@@ -241,6 +264,19 @@ async def sync_watchlist(custom_store: BansheeStore | None = None) -> None:
 async def daily_sync(_: str = Depends(validate_key)) -> dict[str, str]:
     await sync_watchlist()
     return {"status": "ok"}
+
+
+@app.post("/tasks/upcoming-sync")
+async def upcoming_sync(_: str = Depends(validate_key)) -> dict[str, str]:
+    await refresh_upcoming_calls(store, calls_bucket, email_bucket)
+    cleanup_email_queue(email_bucket, set(store.list_tickers()))
+    return {"status": "ok"}
+
+
+@app.post("/tasks/send-queued-emails")
+def send_queued_emails(_: str = Depends(validate_key)) -> dict[str, str]:
+    send_due_emails(email_bucket)
+    return {"status": "sent"}
 
 
 LOGIN_HTML = """
@@ -1603,6 +1639,6 @@ def watchlist_page(request: Request):
     session_id = request.cookies.get("banshee_session")
     if session_id not in authenticated_sessions:
         return HTMLResponse(content=LOGIN_HTML.replace("{error}", ""))
-    
+
     api_key = get_setting("BANSHEE_API_KEY")
     return WATCHLIST_HTML.replace("{api_key}", api_key)

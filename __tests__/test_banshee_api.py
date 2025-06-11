@@ -17,7 +17,9 @@ def test_get_watchlist_endpoint():
 
 
 def test_add_watchlist_endpoint():
-    with patch("src.banshee_api.store") as store:
+    with patch("src.banshee_api.store") as store, patch(
+        "src.banshee_api.refresh_upcoming_calls"
+    ) as refresh, patch("src.banshee_api.cleanup_email_queue") as clean:
         client = TestClient(app)
         resp = client.post(
             "/watchlist",
@@ -26,6 +28,8 @@ def test_add_watchlist_endpoint():
         )
         assert resp.status_code == 200
         store.add_ticker.assert_called_with("MSFT", "griffin")
+        assert refresh.called
+        assert clean.called
 
 
 def test_send_global_alert_endpoint():
