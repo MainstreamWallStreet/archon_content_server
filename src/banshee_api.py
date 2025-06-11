@@ -2429,9 +2429,8 @@ WATCHLIST_HTML = """
         const result = await resp.json();
         showMessage(result.message || `${ticker.toUpperCase()} removed from watchlist`, 'success', 'fas fa-check-circle');
         
-        // Refresh both watchlist and earnings data
-        loadWatchlist();
-        loadUpcomingEarnings();
+        // Automatically trigger the full refresh process with UI feedback
+        await refreshUpcomingEarnings();
         
       } catch (error) {
         console.error('Error deleting ticker:', error);
@@ -2587,8 +2586,28 @@ WATCHLIST_HTML = """
         
         showMessage('Starting comprehensive data refresh...', 'success', 'fas fa-sync-alt');
         
+        // Get current watchlist to show which companies are being processed
+        let watchlistTickers = [];
+        try {
+          const watchlistResp = await fetch(apiKey ? '/watchlist' : '/public/watchlist', {
+            headers: apiKey ? {'X-API-Key': apiKey} : {}
+          });
+          if (watchlistResp.ok) {
+            const watchlistData = await watchlistResp.json();
+            watchlistTickers = watchlistData.tickers || [];
+          }
+        } catch (error) {
+          console.log('Could not fetch watchlist for display:', error);
+        }
+        
+        // Create company list for display
+        const companyList = watchlistTickers.length > 0 
+          ? watchlistTickers.slice(0, 3).map(t => t.toUpperCase()).join(', ') + 
+            (watchlistTickers.length > 3 ? ` +${watchlistTickers.length - 3} more` : '')
+          : 'tracked companies';
+        
         // Step 2: Fetching data
-        setStepActive(2, 'Fetching latest earnings data...');
+        setStepActive(2, `Fetching latest earnings data for ${companyList}...`);
         await delay(200);
         
         // Call the refresh endpoint (requires authentication)
@@ -2606,7 +2625,7 @@ WATCHLIST_HTML = """
         completeStep(2, 'Data fetched successfully');
         
         // Step 3: Cleaning stale data
-        setStepActive(3, 'Cleaning up stale data...');
+        setStepActive(3, `Cleaning stale data for ${companyList}...`);
         await delay(300);
         
         const result = await resp.json();
