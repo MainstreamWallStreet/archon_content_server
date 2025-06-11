@@ -5,7 +5,7 @@ output "workload_identity_provider" {
 
 output "cloud_run_service_account" {
   description = "The email of the Cloud Run service account"
-  value       = google_service_account.cloud_run_sa.email
+  value       = data.google_service_account.cloud_run_sa.email
 }
 
 output "project_id" {

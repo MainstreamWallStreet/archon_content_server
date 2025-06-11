@@ -14,15 +14,13 @@ provider "google" {
 
 data "google_project" "current" {}
 
-# Service accounts
-resource "google_service_account" "cloud_run_sa" {
-  account_id   = "cloud-run-banshee-sa"
-  display_name = "Banshee Cloud Run SA"
+# Existing service accounts (pre-created outside Terraform)
+data "google_service_account" "cloud_run_sa" {
+  account_id = "cloud-run-banshee-sa"
 }
 
-resource "google_service_account" "deploy_sa" {
-  account_id   = "deploy-banshee-sa"
-  display_name = "Banshee Deploy SA"
+data "google_service_account" "deploy_sa" {
+  account_id = "deploy-banshee-sa"
 }
 
 # Artifact Registry
@@ -61,7 +59,7 @@ resource "google_iam_workload_identity_pool_provider" "github_provider_v3" {
 }
 
 resource "google_service_account_iam_member" "github_wif" {
-  service_account_id = google_service_account.cloud_run_sa.name
+  service_account_id = data.google_service_account.cloud_run_sa.name
   role               = "roles/iam.workloadIdentityUser"
   member             = "principalSet://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${google_iam_workload_identity_pool.github_pool.workload_identity_pool_id}/attribute.repository/${var.github_owner}/${var.github_repo}"
 }
@@ -77,7 +75,7 @@ resource "google_clouddeploy_target" "dev" {
 
   execution_configs {
     usages         = ["RENDER", "DEPLOY"]
-    service_account = google_service_account.deploy_sa.email
+    service_account = data.google_service_account.deploy_sa.email
   }
 }
 
@@ -96,13 +94,13 @@ resource "google_clouddeploy_delivery_pipeline" "banshee" {
 resource "google_project_iam_member" "deploy_run_admin" {
   project = var.project
   role    = "roles/run.admin"
-  member  = "serviceAccount:${google_service_account.deploy_sa.email}"
+  member  = "serviceAccount:${data.google_service_account.deploy_sa.email}"
 }
 
 resource "google_project_iam_member" "deploy_sa_user" {
   project = var.project
   role    = "roles/iam.serviceAccountUser"
-  member  = "serviceAccount:${google_service_account.deploy_sa.email}"
+  member  = "serviceAccount:${data.google_service_account.deploy_sa.email}"
 }
 
 resource "google_project_iam_member" "cloudbuild_deployer" {
@@ -115,41 +113,41 @@ resource "google_project_iam_member" "cloudbuild_deployer" {
 resource "google_project_iam_member" "cloud_run_builder" {
   project = var.project
   role    = "roles/cloudbuild.builds.builder"
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  member  = "serviceAccount:${data.google_service_account.cloud_run_sa.email}"
 }
 
 resource "google_project_iam_member" "cloud_run_admin" {
   project = var.project
   role    = "roles/run.admin"
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  member  = "serviceAccount:${data.google_service_account.cloud_run_sa.email}"
 }
 
 # Add Service Account Token Creator role
 resource "google_project_iam_member" "cloud_run_token_creator" {
   project = var.project
   role    = "roles/iam.serviceAccountTokenCreator"
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  member  = "serviceAccount:${data.google_service_account.cloud_run_sa.email}"
 }
 
 # Add Service Account User role
 resource "google_project_iam_member" "cloud_run_sa_user" {
   project = var.project
   role    = "roles/iam.serviceAccountUser"
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  member  = "serviceAccount:${data.google_service_account.cloud_run_sa.email}"
 }
 
 # Allow Cloud Run service account to invoke services
 resource "google_project_iam_member" "cloud_run_invoker" {
   project = var.project
   role    = "roles/run.invoker"
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  member  = "serviceAccount:${data.google_service_account.cloud_run_sa.email}"
 }
 
 # Allow Cloud Run SA to access Secret Manager secrets
 resource "google_project_iam_member" "cloud_run_secret_accessor" {
   project = var.project
   role    = "roles/secretmanager.secretAccessor"
-  member  = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  member  = "serviceAccount:${data.google_service_account.cloud_run_sa.email}"
 }
 
 # Allow public access to Cloud Run service
@@ -264,7 +262,7 @@ resource "google_secret_manager_secret_version" "alert_recipients" {
 resource "google_storage_bucket_iam_member" "cloud_run_logs_writer" {
   bucket = "banshee-tf-state-202407"
   role   = "roles/storage.objectCreator"
-  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  member = "serviceAccount:${data.google_service_account.cloud_run_sa.email}"
 }
 
 # Storage bucket for Banshee data
@@ -277,7 +275,7 @@ resource "google_storage_bucket" "banshee_data" {
 resource "google_storage_bucket_iam_member" "banshee_data_writer" {
   bucket = google_storage_bucket.banshee_data.name
   role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  member = "serviceAccount:${data.google_service_account.cloud_run_sa.email}"
 }
 
 # Bucket for upcoming earnings data
@@ -290,7 +288,7 @@ resource "google_storage_bucket" "earnings_bucket" {
 resource "google_storage_bucket_iam_member" "earnings_writer" {
   bucket = google_storage_bucket.earnings_bucket.name
   role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  member = "serviceAccount:${data.google_service_account.cloud_run_sa.email}"
 }
 
 # Bucket for queued emails
@@ -303,5 +301,5 @@ resource "google_storage_bucket" "email_queue" {
 resource "google_storage_bucket_iam_member" "email_queue_writer" {
   bucket = google_storage_bucket.email_queue.name
   role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${google_service_account.cloud_run_sa.email}"
+  member = "serviceAccount:${data.google_service_account.cloud_run_sa.email}"
 } 

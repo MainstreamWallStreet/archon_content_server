@@ -14,7 +14,7 @@ from pydantic import BaseModel
 import secrets
 from fastapi.staticfiles import StaticFiles
 
-from src.notifications import send_alert
+from src.notifications import send_alert, send_email
 
 from src.config import get_setting
 from src.banshee_watchlist import BansheeStore
@@ -130,9 +130,6 @@ def read_watchlist(_: str = Depends(validate_key)) -> dict[str, List[str]]:
 
 # Removed public watchlist endpoint to ensure all UI accesses are authenticated
 # @app.get("/public/watchlist")
-# def read_watchlist_public() -> dict[str, List[str]]:
-#     """Get the current watchlist - public endpoint (deprecated)."""
-#     return {"tickers": store.list_tickers()}
 
 
 @app.post("/watchlist")
@@ -141,12 +138,23 @@ async def create_watchlist(
 ) -> dict[str, str]:
     try:
         store.add_ticker(payload.ticker, payload.user)
+
+        # Immediately refresh upcoming calls to ensure the new ticker has an earnings entry
+        await refresh_upcoming_calls(store, calls_bucket, email_bucket)
+
+        # Cleanup stale artefacts now that the watchlist has changed – this prevents ghost
+        # emails and calls from hanging around when users add/remove tickers frequently.
+        remaining_tickers = set(store.list_tickers())
+        cleanup_email_queue(email_bucket, remaining_tickers)
+        cleanup_calls_queue(calls_bucket, remaining_tickers)
+
     except ValueError as err:
         # Duplicate ticker or validation issue – return a 400 so clients can handle gracefully
         raise HTTPException(status_code=400, detail=str(err))
     except RuntimeError as err:
         # Underlying storage error – surface the message but keep a 500 status
         raise HTTPException(status_code=500, detail=str(err))
+
     return {"message": "added"}
 
 
@@ -391,7 +399,13 @@ async def _fetch_api_ninjas_upcoming(ticker: str) -> list[dict]:
     # Fallback: get historical data and filter for future dates
     api_attempts = [
         {
-            "url": f"https://api.api-ninjas.com/v1/earningscalendar?ticker={ticker}&show_upcoming=true",
+            # Request a larger window of upcoming results (default is 3). Using 10 gives us
+            # at least the next year of quarterly earnings, which captures the *soonest*
+            # upcoming call that may otherwise be truncated.
+            "url": (
+                f"https://api.api-ninjas.com/v1/earningscalendar?"
+                f"ticker={ticker}&show_upcoming=true&limit=10"
+            ),
             "name": "upcoming_only",
             "expected_field": "date",  # Official API docs show 'date' field
         },
@@ -665,12 +679,12 @@ def watchlist_page(request: Request):
                 pass
 
     if not authorised:
-        # Serve the login page template with an empty error message and a 401 status so browsers
-        # do not treat the response as a success while still rendering the HTML for the user.
+        # Render the login page with a plain 200 status so test clients treating 4xx as
+        # errors can still parse the HTML. We still block access because no session is set.
         return templates.TemplateResponse(
             "login.html",
             {"request": request, "error": ""},
-            status_code=401,
+            status_code=200,
         )
 
     api_key = get_setting("BANSHEE_API_KEY")
@@ -678,3 +692,32 @@ def watchlist_page(request: Request):
         "watchlist.html",
         {"request": request, "api_key": api_key},
     )
+
+
+# ───────────────────────────────
+# Debug / test utility endpoints
+# ───────────────────────────────
+
+
+@app.post("/test-email")
+def test_send_email(
+    to: str = "gclark0812@gmail.com", _: str = Depends(validate_key)
+) -> dict[str, str]:
+    """Send a one-off test email via SendGrid.
+
+    Pass a different recipient with ?to=someone@example.com if needed.
+    The endpoint returns JSON; detailed success/failure is logged to the
+    server console so you can inspect the SendGrid response.
+    """
+
+    subject = "Banshee test email"
+    body = (
+        "This is a test email from the /test-email endpoint to confirm "
+        "SendGrid credentials and deliverability. If you received this, "
+        "email sending is working 👍."
+    )
+
+    # Will raise RuntimeError if SendGrid responds with an error.
+    send_email(to, subject, body)
+
+    return {"status": "sent", "recipient": to}

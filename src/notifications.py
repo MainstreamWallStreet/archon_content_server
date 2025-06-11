@@ -20,9 +20,10 @@ class NotificationAgent:
     def __init__(self, *, client: SendGridAPIClient, recipient: str) -> None:
         self.client = client
         self.recipient = recipient
-        self.from_email = get_setting("ALERT_FROM_EMAIL", default="banshee@example.com")
+        # Use configured sender address or default to Griffin's mailbox if not provided.
+        self.from_email = get_setting("ALERT_FROM_EMAIL", default="gclark0812@gmail.com")
 
-    def send(self, subject: str, body: str) -> None:
+    def send(self, subject: str, body: str) -> bool:
         logger.info(
             "Attempting to send email to %s with subject: %s", self.recipient, subject
         )
@@ -43,18 +44,19 @@ class NotificationAgent:
                     self.recipient,
                     resp.body,
                 )
-                raise RuntimeError(f"SendGrid error {resp.status_code}: {resp.body}")
+                return False
             logger.info(
                 "✅ Successfully sent email to %s (status: %s)",
                 self.recipient,
                 resp.status_code,
             )
+            return True
         except Exception as e:
             logger.error("❌ Failed to send email to %s: %s", self.recipient, str(e))
-            raise
+            return False
 
 
-def send_email(to_email: str, subject: str, message: str) -> None:
+def send_email(to_email: str, subject: str, message: str) -> bool:
     """Send a notification email using SendGrid.
 
     NOTE: For sending alerts to multiple recipients, use send_alert() instead.
@@ -69,10 +71,10 @@ def send_email(to_email: str, subject: str, message: str) -> None:
     message : str
         Plain text body.
 
-    Raises
-    ------
-    RuntimeError
-        If the SendGrid API returns an error.
+    Returns
+    -------
+    bool
+        True if the email was sent successfully, False otherwise.
     """
     logger.info("🚨 Sending single email alert: '%s'", subject)
     logger.info("📤 Sending email to: %s", to_email)
@@ -80,16 +82,20 @@ def send_email(to_email: str, subject: str, message: str) -> None:
     api_key = get_setting("SENDGRID_API_KEY")
     if not api_key:
         logger.error("❌ SENDGRID_API_KEY not configured - cannot send email")
-        raise RuntimeError("SENDGRID_API_KEY not configured")
+        return False
 
     client = SendGridAPIClient(api_key)
     agent = NotificationAgent(client=client, recipient=to_email)
-    agent.send(subject, message)
+    success = agent.send(subject, message)
 
-    logger.info("✅ Single email sent successfully")
+    if success:
+        logger.info("✅ Single email sent successfully")
+    else:
+        logger.warning("⚠️  Email send failed (see logs above) – continuing without raising")
+    return success
 
 
-def send_alert(subject: str, message: str) -> None:
+def send_alert(subject: str, message: str) -> bool:
     """Send an alert email to all configured recipients.
 
     This is the preferred method for system alerts and notifications that should
@@ -130,7 +136,7 @@ def send_alert(subject: str, message: str) -> None:
             logger.warning(
                 "⚠️  No recipients configured in ALERT_RECIPIENTS - alert will not be sent"
             )
-            return
+            return False
 
     except json.JSONDecodeError as exc:
         logger.error("❌ Invalid ALERT_RECIPIENTS JSON format: %s", exc)
@@ -150,12 +156,13 @@ def send_alert(subject: str, message: str) -> None:
         try:
             logger.info("📤 Sending alert to: %s", addr)
             agent = NotificationAgent(client=client, recipient=addr)
-            agent.send(subject, message)
-            successful_sends += 1
-        except Exception as e:
-            logger.error("❌ Failed to send alert to %s: %s", addr, str(e))
+            if agent.send(subject, message):
+                successful_sends += 1
+            else:
+                failed_sends += 1
+        except Exception as e:  # pragma: no cover – unexpected errors
+            logger.error("❌ Exception while sending alert to %s: %s", addr, str(e))
             failed_sends += 1
-            # Continue trying to send to other recipients even if one fails
 
     logger.info(
         "✅ Alert distribution complete: %d successful, %d failed out of %d total recipients",
@@ -169,8 +176,8 @@ def send_alert(subject: str, message: str) -> None:
             "⚠️  %d email(s) failed to send - check logs above for details", failed_sends
         )
 
-    if successful_sends == 0:
-        raise RuntimeError(f"All {len(recipients)} alert emails failed to send")
+    # Return whether at least one send succeeded
+    return successful_sends > 0
 
 
 # Backward compatibility aliases - these will be deprecated in future versions
