@@ -665,8 +665,13 @@ def watchlist_page(request: Request):
                 pass
 
     if not authorised:
-        # Return the login page but with a 401 status so browsers do not treat it as a success
-        return HTMLResponse(content=LOGIN_HTML.replace("{error}", ""), status_code=401)
+        # Serve the login page template with an empty error message and a 401 status so browsers
+        # do not treat the response as a success while still rendering the HTML for the user.
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": ""},
+            status_code=401,
+        )
 
     api_key = get_setting("BANSHEE_API_KEY")
     return templates.TemplateResponse(
