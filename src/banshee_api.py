@@ -205,6 +205,69 @@ async def get_upcoming_earnings(
         )
 
 
+@app.get("/public/earnings/upcoming")
+async def get_upcoming_earnings_public() -> UpcomingCallsResponse:
+    """Get upcoming earnings calls from GCS storage - public endpoint."""
+    logger = logging.getLogger(__name__)
+    logger.info("Fetching upcoming earnings from GCS storage (public endpoint)")
+    
+    calls = []
+    now = datetime.now(timezone.utc)
+    
+    try:
+        # Get all saved calls from GCS
+        all_items = calls_bucket.list_json("calls/")
+        logger.info("Found %d total items in GCS calls bucket", len(all_items))
+        
+        for path, call_data in all_items:
+            try:
+                logger.info("Processing GCS item: %s -> %s", path, call_data)
+                
+                # Parse the call time
+                call_time_str = call_data["call_time"]
+                call_time = datetime.fromisoformat(call_time_str)
+                
+                # Only include future calls
+                if call_time <= now:
+                    logger.info("Skipping past call: %s at %s", call_data["ticker"], call_time_str)
+                    continue
+                
+                # Create EarningsCall object
+                call = EarningsCall(
+                    ticker=call_data["ticker"],
+                    call_date=call_data["call_date"],
+                    call_time=call_time_str,
+                    status="scheduled",
+                    actual_eps=None,
+                    estimated_eps=None,
+                    actual_revenue=None,
+                    estimated_revenue=None,
+                )
+                calls.append(call)
+                logger.info("Added upcoming call: %s on %s", call.ticker, call.call_date)
+                
+            except Exception as e:
+                logger.error("Error processing GCS item %s: %s", path, str(e))
+                continue
+        
+        # Sort by call time
+        calls.sort(key=lambda x: x.call_time)
+        
+        next_call = calls[0] if calls else None
+        
+        logger.info("Returning %d upcoming calls", len(calls))
+        return UpcomingCallsResponse(
+            calls=calls, total_count=len(calls), next_call=next_call
+        )
+        
+    except Exception as e:
+        logger.error("Error fetching upcoming earnings from GCS: %s", str(e))
+        # Return empty response if there's an error
+        return UpcomingCallsResponse(
+            calls=[], total_count=0, next_call=None
+        )
+
+
 @app.get("/earnings/{ticker}")
 async def get_ticker_earnings(
     ticker: str, _: str = Depends(validate_key)
@@ -1312,7 +1375,12 @@ WATCHLIST_HTML = """
       document.getElementById(tabName + '-tab').classList.add('active');
       
       if (tabName === 'upcoming') {
-        loadUpcomingEarnings();
+        // Try to use authenticated endpoint, fall back to public
+        if (apiKey) {
+          loadUpcomingEarnings();
+        } else {
+          loadUpcomingEarningsPublic();
+        }
       }
     }
     
@@ -1534,6 +1602,157 @@ WATCHLIST_HTML = """
         loadingEl.style.display = 'none';
         listEl.style.display = 'block';
         updateEarningsStats(0);
+      }
+    }
+    
+    async function loadUpcomingEarningsPublic() {
+      const loadingEl = document.getElementById('earnings-loading');
+      const listEl = document.getElementById('earnings-list');
+      
+      // Check for cached data first for instant loading
+      const cachedData = localStorage.getItem('cached_earnings');
+      if (cachedData) {
+        try {
+          const data = JSON.parse(cachedData);
+          console.log('Using cached earnings data:', data.total_count, 'calls');
+          renderEarningsData(data.calls || []);
+        } catch (error) {
+          console.error('Error parsing cached data:', error);
+        }
+      }
+      
+      try {
+        loadingEl.style.display = 'flex';
+        listEl.style.display = 'none';
+        
+        // Use public endpoint that doesn't require authentication
+        const resp = await fetch('/public/earnings/upcoming');
+        
+        if (!resp.ok) {
+          throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        }
+        
+        const data = await resp.json();
+        const calls = data.calls || [];
+        
+        // Cache the fresh data
+        localStorage.setItem('cached_earnings', JSON.stringify(data));
+        
+        renderEarningsData(calls);
+        
+        loadingEl.style.display = 'none';
+        listEl.style.display = 'block';
+        
+      } catch (error) {
+        console.error('Error loading earnings (public):', error);
+        // If we have cached data, don't show error
+        if (!cachedData) {
+          loadingEl.style.display = 'none';
+          listEl.style.display = 'block';
+          updateEarningsStats(0);
+        }
+      }
+    }
+    
+    function renderEarningsData(calls) {
+      const listEl = document.getElementById('earnings-list');
+      currentEarningsData = calls;
+      
+      listEl.innerHTML = '';
+      updateEarningsStats(calls.length);
+      
+      if (calls.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">
+              <i class="fas fa-calendar-times"></i>
+            </div>
+            <p>No upcoming earnings calls found</p>
+            <small>Check back later for new earnings announcements</small>
+          </div>
+        `;
+      } else {
+        calls.forEach((call, index) => {
+          const callTime = new Date(call.call_time);
+          // Convert to EST for display
+          const estOffset = -5; // EST is UTC-5
+          const callTimeEST = new Date(callTime.getTime() + (estOffset * 60 * 60 * 1000));
+          const timeString = callTimeEST.toLocaleString('en-US', {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: 'America/New_York'
+          }) + ' EST';
+          
+          const li = document.createElement('li');
+          li.className = 'card earnings-item';
+          li.innerHTML = `
+            <div class="earnings-header" onclick="showCountdown(${index})">
+              <div class="earnings-ticker">
+                <div class="ticker-icon">${call.ticker.substring(0, 2).toUpperCase()}</div>
+                <div>
+                  <div class="ticker-name">${call.ticker.toUpperCase()}</div>
+                  <div class="earnings-time">
+                    <i class="fas fa-clock"></i>
+                    <span>${timeString}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="countdown" id="countdown-${index}">
+                <i class="fas fa-hourglass-half"></i>
+                <span>Loading...</span>
+              </div>
+            </div>
+            <div class="earnings-details" id="details-${index}">
+              <div class="earnings-info">
+                ${call.estimated_eps ? `
+                  <div class="info-item">
+                    <div class="info-label">
+                      <i class="fas fa-chart-bar"></i>
+                      Est. EPS
+                    </div>
+                    <div class="info-value">$${call.estimated_eps}</div>
+                  </div>
+                ` : ''}
+                ${call.estimated_revenue ? `
+                  <div class="info-item">
+                    <div class="info-label">
+                      <i class="fas fa-dollar-sign"></i>
+                      Est. Revenue
+                    </div>
+                    <div class="info-value">$${(call.estimated_revenue / 1000000).toFixed(0)}M</div>
+                  </div>
+                ` : ''}
+                ${call.actual_eps ? `
+                  <div class="info-item">
+                    <div class="info-label">
+                      <i class="fas fa-chart-line"></i>
+                      Actual EPS
+                    </div>
+                    <div class="info-value">$${call.actual_eps}</div>
+                  </div>
+                ` : ''}
+                ${call.actual_revenue ? `
+                  <div class="info-item">
+                    <div class="info-label">
+                      <i class="fas fa-money-bill-wave"></i>
+                      Actual Revenue
+                    </div>
+                    <div class="info-value">$${(call.actual_revenue / 1000000).toFixed(0)}M</div>
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          `;
+          listEl.appendChild(li);
+        });
+        
+        // Start countdown timers
+        updateCountdowns();
+        setInterval(updateCountdowns, 100); // Update every 100ms for millisecond precision
       }
     }
     
@@ -1847,6 +2066,9 @@ WATCHLIST_HTML = """
     // Load watchlist on page load
     loadWatchlist();
     
+    // Load upcoming earnings immediately (public endpoint)
+    loadUpcomingEarningsPublic();
+    
     async function refreshUpcomingEarnings() {
       const refreshBtn = document.getElementById('refresh-earnings-btn');
       const btnIcon = refreshBtn.querySelector('i');
@@ -1860,7 +2082,7 @@ WATCHLIST_HTML = """
         
         showMessage('Refreshing upcoming earnings data...', 'success', 'fas fa-sync-alt');
         
-        // Call the refresh endpoint
+        // Call the refresh endpoint (requires authentication)
         const resp = await fetch('/tasks/upcoming-sync', {
           method: 'POST',
           headers: {'X-API-Key': apiKey}
@@ -1873,7 +2095,7 @@ WATCHLIST_HTML = """
         const result = await resp.json();
         showMessage('Upcoming earnings data refreshed successfully!', 'success', 'fas fa-check-circle');
         
-        // Reload the earnings data
+        // Reload the earnings data (use authenticated endpoint after refresh)
         loadUpcomingEarnings();
         
       } catch (error) {
@@ -1897,7 +2119,31 @@ def watchlist_page(request: Request):
     """Show the watchlist page or login form."""
     session_id = request.cookies.get("banshee_session")
     if session_id not in authenticated_sessions:
-        return HTMLResponse(content=LOGIN_HTML.replace("{error}", ""))
+        # Show login form with immediate earnings data loading
+        login_with_data = LOGIN_HTML.replace("{error}", "") + """
+<script>
+// Load upcoming earnings data immediately on the login page
+async function loadLoginPageEarnings() {
+  try {
+    const resp = await fetch('/public/earnings/upcoming');
+    if (resp.ok) {
+      const data = await resp.json();
+      console.log('Loaded earnings data on login page:', data.total_count, 'calls');
+      // Store data for when user logs in
+      if (data.calls && data.calls.length > 0) {
+        localStorage.setItem('cached_earnings', JSON.stringify(data));
+      }
+    }
+  } catch (error) {
+    console.log('Could not preload earnings data:', error);
+  }
+}
+
+// Load data immediately
+loadLoginPageEarnings();
+</script>
+"""
+        return HTMLResponse(content=login_with_data)
 
     api_key = get_setting("BANSHEE_API_KEY")
     return WATCHLIST_HTML.replace("{api_key}", api_key)
