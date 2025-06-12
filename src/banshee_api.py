@@ -6,13 +6,9 @@ from datetime import datetime, timezone
 import logging
 import json
 
-from fastapi import Depends, FastAPI, HTTPException, Security, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import Depends, FastAPI, HTTPException, Security
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
-import secrets
-from fastapi.staticfiles import StaticFiles
 
 from src.notifications import send_alert, send_email
 
@@ -41,21 +37,6 @@ store = BansheeStore(get_setting("BANSHEE_DATA_BUCKET"))
 calls_bucket = GcsBucket(get_setting("EARNINGS_BUCKET"))
 email_bucket = GcsBucket(get_setting("EMAIL_QUEUE_BUCKET"))
 app = FastAPI(title="Banshee API", version="1.0")
-
-# Serve static files (for logo, etc.)
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
-
-# Simple session storage for authenticated users (in production, use proper session management)
-authenticated_sessions = set()
-
-
-def check_web_auth(request: Request):
-    """Check if the user is authenticated for web access."""
-    session_id = request.cookies.get("banshee_session")
-    if session_id not in authenticated_sessions:
-        raise HTTPException(status_code=401, detail="Authentication required")
-    return True
 
 
 class TickerPayload(BaseModel):
@@ -93,43 +74,13 @@ class UpcomingCallsResponse(BaseModel):
 
 @app.get("/")
 def root():
-    """Redirect root to the web interface."""
-    return RedirectResponse(url="/web")
-
-
-@app.post("/web-login")
-def web_login(request: Request, password: str = Form(...)):
-    """Simple password-based login for web interface."""
-    expected_password = get_setting("BANSHEE_WEB_PASSWORD")
-    if not secrets.compare_digest(password, expected_password):
-        return templates.TemplateResponse(
-            "login.html",
-            {
-                "request": request,
-                "error": "<div class='error'><i class='fas fa-exclamation-triangle'></i>Invalid password. Please try again.</div>",
-            },
-            status_code=401,
-        )
-
-    # Create a simple session token
-    import uuid
-
-    session_id = str(uuid.uuid4())
-    authenticated_sessions.add(session_id)
-
-    # Redirect to main page with session cookie
-    response = RedirectResponse(url="/web", status_code=302)
-    response.set_cookie("banshee_session", session_id, max_age=3600 * 24)  # 24 hours
-    return response
+    """API root endpoint."""
+    return {"status": "ok", "message": "Banshee API is running"}
 
 
 @app.get("/watchlist")
 def read_watchlist(_: str = Depends(validate_key)) -> dict[str, List[str]]:
     return {"tickers": store.list_tickers()}
-
-
-# Removed public watchlist endpoint to ensure all UI accesses are authenticated
-# @app.get("/public/watchlist")
 
 
 @app.post("/watchlist")
@@ -335,13 +286,6 @@ async def get_upcoming_earnings(
         logger.error("Error fetching upcoming earnings from GCS: %s", str(e))
         # Return empty response if there's an error
         return UpcomingCallsResponse(calls=[], total_count=0, next_call=None)
-
-
-# Removed public earnings upcoming endpoint to enforce authentication
-# @app.get("/public/earnings/upcoming")
-# async def get_upcoming_earnings_public() -> UpcomingCallsResponse:
-#     """Deprecated public endpoint for upcoming earnings."""
-#     return await get_upcoming_earnings(validate_key())
 
 
 @app.get("/earnings/{ticker}")
@@ -656,42 +600,6 @@ async def upcoming_sync(_: str = Depends(validate_key)) -> dict[str, str]:
 def send_queued_emails(_: str = Depends(validate_key)) -> dict[str, str]:
     send_due_emails(email_bucket)
     return {"status": "sent"}
-
-
-@app.get("/web", response_class=HTMLResponse)
-def watchlist_page(request: Request):
-    """Serve the watchlist UI; requires a valid session cookie."""
-    session_id = request.cookies.get("banshee_session")
-    authorised = session_id in authenticated_sessions
-
-    # Fallback to HTTP Basic auth (primarily for test client convenience)
-    if not authorised:
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Basic "):
-            import base64
-            try:
-                username_password = base64.b64decode(auth_header.split(" ", 1)[1]).decode()
-                _username, _sep, supplied_password = username_password.partition(":")
-                if supplied_password == get_setting("BANSHEE_WEB_PASSWORD"):
-                    authorised = True
-            except Exception:
-                # Malformed header falls through to 401 below
-                pass
-
-    if not authorised:
-        # Render the login page with a plain 200 status so test clients treating 4xx as
-        # errors can still parse the HTML. We still block access because no session is set.
-        return templates.TemplateResponse(
-            "login.html",
-            {"request": request, "error": ""},
-            status_code=200,
-        )
-
-    api_key = get_setting("BANSHEE_API_KEY")
-    return templates.TemplateResponse(
-        "watchlist.html",
-        {"request": request, "api_key": api_key},
-    )
 
 
 # ───────────────────────────────
