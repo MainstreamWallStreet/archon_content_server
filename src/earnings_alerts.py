@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Callable, Awaitable, Dict, List, Tuple
@@ -17,10 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 def _client() -> storage.Client:
-    opts = None
-    if os.getenv("STORAGE_EMULATOR_HOST"):
-        opts = {"api_endpoint": os.environ["STORAGE_EMULATOR_HOST"]}
-    return storage.Client(client_options=opts)
+    """Return a Google Cloud Storage client targeting the default endpoint."""
+    return storage.Client()
 
 
 class GcsBucket:

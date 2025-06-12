@@ -11,10 +11,8 @@ from google.cloud import storage
 
 
 def _client() -> storage.Client:
-    opts = None
-    if os.getenv("STORAGE_EMULATOR_HOST"):
-        opts = {"api_endpoint": os.environ["STORAGE_EMULATOR_HOST"]}
-    return storage.Client(client_options=opts)
+    """Return a Google Cloud Storage client targeting the default endpoint."""
+    return storage.Client()
 
 
 def _check_exists(bucket: storage.Bucket, path: str) -> bool:

@@ -4,7 +4,6 @@ import json
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 
-import os
 from google.cloud import storage
 from google.cloud.exceptions import GoogleCloudError
 
@@ -18,10 +17,8 @@ class GcsJobQueue:
         self.bucket_name = bucket
         self.prefix = prefix
         try:
-            client_opts = None
-            if os.getenv("STORAGE_EMULATOR_HOST"):
-                client_opts = {"api_endpoint": os.environ["STORAGE_EMULATOR_HOST"]}
-            self._client = storage.Client(client_options=client_opts)
+            # Initialize default GCS client (no emulator override)
+            self._client = storage.Client()
             self._bucket = self._client.bucket(bucket)
             # Verify bucket exists and is accessible
             if not self._bucket.exists():

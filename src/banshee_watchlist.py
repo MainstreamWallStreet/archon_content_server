@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List
 
@@ -16,11 +15,9 @@ class BansheeStore:
     def __init__(self, bucket: str) -> None:
         if not bucket:
             raise ValueError("GCS bucket is required")
-        client_opts = None
-        if os.getenv("STORAGE_EMULATOR_HOST"):
-            client_opts = {"api_endpoint": os.environ["STORAGE_EMULATOR_HOST"]}
         try:
-            self._client = storage.Client(client_options=client_opts)
+            # Use default GCS client (no emulator override)
+            self._client = storage.Client()
             self._bucket = self._client.bucket(bucket)
             if not self._bucket.exists():
                 raise ValueError(f"GCS bucket {bucket} does not exist")
