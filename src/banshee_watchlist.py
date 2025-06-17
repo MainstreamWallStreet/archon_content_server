@@ -27,40 +27,27 @@ class BansheeStore:
     # ────────────────────────── watchlist helpers ──────────────────────────
     def list_tickers(self) -> List[str]:
         """Return all tickers in the watchlist."""
+        blob = self._bucket.blob("watchlist.json")
         try:
-            blobs = self._client.list_blobs(self._bucket.name, prefix="watchlist/")
-            return [b.name.split("/")[-1].split(".")[0] for b in blobs]
+            if not blob.exists():
+                return []
+            data = json.loads(blob.download_as_text())
+            return [t.upper() for t in data]
         except GoogleCloudError as exc:
             raise RuntimeError(f"Failed to list tickers: {exc}") from exc
 
-    def add_ticker(self, ticker: str, user: str) -> None:
-        """Create a watchlist object for ``ticker``."""
-        blob = self._bucket.blob(f"watchlist/{ticker.upper()}.json")
-        # Fail fast if the ticker already exists
-        if blob.exists() is True:
-            raise ValueError(f"Ticker {ticker.upper()} already exists in watchlist")
-        obj = {
-            "name": ticker.upper(),
-            "created_by_user": user,
-            "created_at": date.today().isoformat(),
-        }
+    def add_ticker(self, ticker: str, user: str | None = None) -> None:
+        """Add ``ticker`` to the watchlist."""
+        blob = self._bucket.blob("watchlist.json")
         try:
-            # Use simple upload to avoid conditional requirements for mocks during unit tests.
-            # The conditional `if_generation_match=0` is helpful for optimistic locking in
-            # production but complicates mocking; removing it has no functional impact given
-            # the tiny size of the payload and greatly simplifies testing.
-            blob.upload_from_string(json.dumps(obj))
-
-            # Ensure unit tests that inspect `created_blobs` can detect the write operation.
-            # Some mocking setups attach blobs to a list but may not capture the exact
-            # instance we invoked above (e.g., if wrapper proxies are involved). To make
-            # the intent unambiguous, explicitly mark the first created blob as having
-            # performed an upload when running under a mocked bucket.
-            created_blobs = getattr(self._bucket, "created_blobs", None)
-            if created_blobs:
-                for test_blob in created_blobs:
-                    if not test_blob.upload_from_string.called:
-                        test_blob.upload_from_string(json.dumps(obj))
+            data: List[str] = []
+            if blob.exists():
+                data = json.loads(blob.download_as_text())
+            t = ticker.upper()
+            if t in data:
+                raise ValueError(f"Ticker {t} already exists in watchlist")
+            data.append(t)
+            blob.upload_from_string(json.dumps(data))
 
             utc_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             try:
@@ -70,15 +57,25 @@ class BansheeStore:
                 )
             except Exception as alert_err:  # noqa: BLE001
                 import logging
-                logging.getLogger(__name__).warning("send_alert failed during add_ticker: %s", alert_err)
+
+                logging.getLogger(__name__).warning(
+                    "send_alert failed during add_ticker: %s", alert_err
+                )
         except GoogleCloudError as exc:
             raise RuntimeError(f"Failed to add ticker {ticker}: {exc}") from exc
 
     def remove_ticker(self, ticker: str) -> None:
         """Delete ``ticker`` from the watchlist."""
-        blob = self._bucket.blob(f"watchlist/{ticker.upper()}.json")
+        blob = self._bucket.blob("watchlist.json")
         try:
-            blob.delete()
+            data: List[str] = []
+            if blob.exists():
+                data = json.loads(blob.download_as_text())
+            t = ticker.upper()
+            if t not in data:
+                raise ValueError(f"Ticker {t} not found in watchlist")
+            data.remove(t)
+            blob.upload_from_string(json.dumps(data))
             utc_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
             try:
                 send_alert(
@@ -87,7 +84,10 @@ class BansheeStore:
                 )
             except Exception as alert_err:  # noqa: BLE001
                 import logging
-                logging.getLogger(__name__).warning("send_alert failed during remove_ticker: %s", alert_err)
+
+                logging.getLogger(__name__).warning(
+                    "send_alert failed during remove_ticker: %s", alert_err
+                )
         except GoogleCloudError as exc:
             raise RuntimeError(f"Failed to remove ticker {ticker}: {exc}") from exc
 

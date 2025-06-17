@@ -28,11 +28,20 @@ def test_send_email_failure():
     fake_client = MagicMock()
     fake_client.send.return_value.status_code = 500
     fake_client.send.return_value.body = "Internal Server Error"
+    log = MagicMock()
     with patch("src.notifications.SendGridAPIClient", return_value=fake_client), patch(
         "src.notifications.get_setting", side_effect=lambda k, **kwargs: "x"
-    ):
-        with pytest.raises(RuntimeError):
-            send_email("user@example.com", "subj", "body")
+    ), patch("src.notifications.logger", log):
+        send_email("user@example.com", "subj", "body")
+        log.error.assert_any_call(
+            "SendGrid error %s for recipient %s: %s",
+            500,
+            "user@example.com",
+            "Internal Server Error"
+        )
+        log.warning.assert_any_call(
+            "⚠️  Email send failed (see logs above) – continuing without raising"
+        )
 
 
 def test_send_alert_all_recipients():
