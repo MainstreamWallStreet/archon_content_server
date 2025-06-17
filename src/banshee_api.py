@@ -796,3 +796,29 @@ def remove_ticker_with_logging(ticker: str):
     log_store_operation("remove_ticker", ticker)
     return original_remove_ticker(ticker)
 store.remove_ticker = remove_ticker_with_logging
+
+@app.get("/email-queue")
+async def get_email_queue(_: str = Depends(validate_key)):
+    """Return everything currently in banshee-email-queue."""
+    logger = logging.getLogger(__name__)
+    logger.info("Received GET request for email queue")
+    try:
+        items = email_bucket.list_json()
+        logger.info("Successfully retrieved %d items from email queue", len(items))
+        return {"items": items}
+    except Exception as e:
+        logger.error("Error retrieving email queue: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/earnings")
+async def get_earnings(_: str = Depends(validate_key)):
+    """Return everything currently in banshee-earnings."""
+    logger = logging.getLogger(__name__)
+    logger.info("Received GET request for earnings")
+    try:
+        items = calls_bucket.list_json()
+        logger.info("Successfully retrieved %d items from earnings", len(items))
+        return {"items": items}
+    except Exception as e:
+        logger.error("Error retrieving earnings: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
