@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import aiohttp
+import httpx
 from typing import List
 from datetime import datetime, timezone
 import logging
@@ -41,7 +42,7 @@ app = FastAPI(title="Banshee API", version="1.0")
 
 class TickerPayload(BaseModel):
     ticker: str
-    user: str
+    user: str | None = None
 
 
 class AlertPayload(BaseModel):
@@ -89,6 +90,7 @@ async def create_watchlist(
 ) -> dict[str, str]:
     try:
         store.add_ticker(payload.ticker, payload.user)
+        await _notify_raven(payload.ticker)
 
         # Immediately refresh upcoming calls to ensure the new ticker has an earnings entry
         await refresh_upcoming_calls(store, calls_bucket, email_bucket)
@@ -100,8 +102,7 @@ async def create_watchlist(
         cleanup_calls_queue(calls_bucket, remaining_tickers)
 
     except ValueError as err:
-        # Duplicate ticker or validation issue – return a 400 so clients can handle gracefully
-        raise HTTPException(status_code=400, detail=str(err))
+        raise HTTPException(status_code=409, detail=str(err))
     except RuntimeError as err:
         # Underlying storage error – surface the message but keep a 500 status
         raise HTTPException(status_code=500, detail=str(err))
@@ -323,6 +324,13 @@ def send_global_alert(
 
     send_alert(payload.subject, payload.message)
     return {"status": "sent"}
+
+
+async def _notify_raven(ticker: str) -> None:
+    """Notify Raven about a new ticker."""
+    url = get_setting("RAVEN_URL", default="http://raven") + "/notes"
+    async with httpx.AsyncClient() as client:
+        await client.post(url, json={"ticker": ticker})
 
 
 async def _fetch_api_ninjas(ticker: str) -> list[dict]:
