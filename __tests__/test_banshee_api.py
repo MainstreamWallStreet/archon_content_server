@@ -14,17 +14,6 @@ def get_setting_side_effect(key, **kwargs):
     return "dummy"
 
 
-def test_get_watchlist_endpoint():
-    with patch("src.banshee_api.store") as store, patch(
-        "src.banshee_api.get_setting", side_effect=get_setting_side_effect
-    ):
-        store.list_tickers.return_value = ["AAPL"]
-        client = TestClient(app)
-        resp = client.get("/watchlist", headers=HEADERS)
-        assert resp.status_code == 200
-        assert resp.json() == {"tickers": ["AAPL"]}
-
-
 def test_add_watchlist_endpoint():
     with patch("src.banshee_api.store") as store, patch(
         "src.banshee_api.refresh_upcoming_calls"
@@ -44,24 +33,6 @@ def test_add_watchlist_endpoint():
         assert refresh.called
         assert clean_email.called
         assert clean_calls.called
-
-
-def test_send_global_alert_endpoint():
-    with patch("src.banshee_api.send_alert") as send_alert, patch(
-        "src.banshee_api.get_setting", side_effect=get_setting_side_effect
-    ):
-        client = TestClient(app)
-        payload = {"subject": "Hello", "message": "World"}
-        resp = client.post("/send-global-alert", headers=HEADERS, json=payload)
-        assert resp.status_code == 200
-        send_alert.assert_called_with("Hello", "World")
-
-
-def test_send_global_alert_requires_auth():
-    with patch("src.banshee_api.get_setting", side_effect=get_setting_side_effect):
-        client = TestClient(app)
-        resp = client.post("/send-global-alert", json={"subject": "sub", "message": "body"})
-        assert resp.status_code == 200
 
 
 def test_delete_watchlist_endpoint():

@@ -95,11 +95,6 @@ def root():
     return {"status": "ok", "message": "Banshee API is running"}
 
 
-@app.get("/watchlist")
-def read_watchlist(_: str = Depends(validate_key)) -> dict[str, List[str]]:
-    return {"tickers": store.list_tickers()}
-
-
 @app.post("/watchlist/tickers")
 async def create_ticker(ticker: dict, _: str = Depends(validate_key)):
     """Add a ticker to the watchlist."""
@@ -290,14 +285,32 @@ async def get_ticker_earnings(
     return calls
 
 
-@app.post("/send-global-alert")
-def send_global_alert(
-    payload: AlertPayload, _: str = Depends(validate_key)
-) -> dict[str, str]:
-    """Send an alert email to all configured recipients."""
+@app.get("/email-queue")
+async def get_email_queue(_: str = Depends(validate_key)):
+    """Return everything currently in banshee-email-queue."""
+    logger = logging.getLogger(__name__)
+    logger.info("Received GET request for email queue")
+    try:
+        items = email_bucket.list_json()
+        logger.info("Successfully retrieved %d items from email queue", len(items))
+        return {"items": items}
+    except Exception as e:
+        logger.error("Error retrieving email queue: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
-    send_alert(payload.subject, payload.message)
-    return {"status": "sent"}
+
+@app.get("/earnings")
+async def get_earnings(_: str = Depends(validate_key)):
+    """Return everything currently in banshee-earnings."""
+    logger = logging.getLogger(__name__)
+    logger.info("Received GET request for earnings")
+    try:
+        items = calls_bucket.list_json()
+        logger.info("Successfully retrieved %d items from earnings", len(items))
+        return {"items": items}
+    except Exception as e:
+        logger.error("Error retrieving earnings: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 async def _notify_raven(
@@ -541,238 +554,6 @@ async def _fetch_api_ninjas_upcoming(ticker: str) -> list[dict]:
     return []
 
 
-async def sync_watchlist(custom_store: BansheeStore | None = None) -> None:
-    target = custom_store or store
-    for ticker in target.list_tickers():
-        data = await _fetch_api_ninjas(ticker)
-        target.record_api_call("earningscalendar", ticker)
-        for item in data:
-            call_date = item["earnings_date"][:10]
-            call_obj = {
-                "ticker": ticker,
-                "call_date": call_date,
-                "call_time": item["earnings_date"],
-                "status": "scheduled",
-            }
-            target.schedule_call(call_obj)
-
-
-@app.post("/tasks/daily-sync")
-async def daily_sync(_: str = Depends(validate_key)) -> dict[str, str]:
-    await sync_watchlist()
-    return {"status": "ok"}
-
-
-@app.post("/tasks/upcoming-sync")
-async def upcoming_sync(_: str = Depends(validate_key)) -> dict[str, str]:
-    """Refresh upcoming earnings calls and clean up stale data."""
-    logger = logging.getLogger(__name__)
-    logger.info("Starting comprehensive upcoming earnings sync")
-
-    try:
-        # Get current ticker count for reference
-        current_tickers = set(store.list_tickers())
-        ticker_count = len(current_tickers)
-        logger.info(
-            "Current watchlist contains %d tickers: %s",
-            ticker_count,
-            list(current_tickers),
-        )
-
-        # Refresh upcoming calls (this will fetch new data and create new calls/emails)
-        logger.info("Refreshing upcoming earnings calls from API")
-        await refresh_upcoming_calls(store, calls_bucket, email_bucket)
-
-        # Clean up stale data that no longer corresponds to watchlist tickers
-        logger.info("Cleaning up stale calls and emails")
-        removed_calls = cleanup_calls_queue(calls_bucket, current_tickers)
-        removed_emails = cleanup_email_queue(email_bucket, current_tickers)
-
-        # Clean up past/expired data to keep storage lean
-        logger.info("Cleaning up past calls and expired emails")
-        past_calls, past_emails = cleanup_past_data(calls_bucket, email_bucket)
-
-        # Create detailed response message
-        cleanup_details = []
-        total_removed_calls = removed_calls + past_calls
-        total_removed_emails = removed_emails + past_emails
-
-        if total_removed_calls > 0:
-            if removed_calls > 0 and past_calls > 0:
-                cleanup_details.append(
-                    f"removed {total_removed_calls} call(s) ({removed_calls} stale, {past_calls} past)"
-                )
-            elif removed_calls > 0:
-                cleanup_details.append(f"removed {removed_calls} stale call(s)")
-            else:
-                cleanup_details.append(f"removed {past_calls} past call(s)")
-
-        if total_removed_emails > 0:
-            if removed_emails > 0 and past_emails > 0:
-                cleanup_details.append(
-                    f"removed {total_removed_emails} email(s) ({removed_emails} stale, {past_emails} expired)"
-                )
-            elif removed_emails > 0:
-                cleanup_details.append(f"removed {removed_emails} stale email(s)")
-            else:
-                cleanup_details.append(f"removed {past_emails} expired email(s)")
-
-        if cleanup_details:
-            cleanup_msg = f" and {', '.join(cleanup_details)}"
-        else:
-            cleanup_msg = " (no cleanup needed)"
-
-        success_message = f"Sync completed for {ticker_count} ticker(s){cleanup_msg}"
-        logger.info(
-            "Successfully completed upcoming earnings sync: %s", success_message
-        )
-
-        return {"status": "ok", "message": success_message}
-
-    except Exception as e:
-        logger.error("Error during upcoming earnings sync: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Failed to sync upcoming earnings: {str(e)}"
-        )
-
-
-@app.post("/tasks/send-queued-emails")
-def send_queued_emails(_: str = Depends(validate_key)) -> dict[str, str]:
-    send_due_emails(email_bucket)
-    return {"status": "sent"}
-
-
-# ───────────────────────────────
-# Debug / test utility endpoints
-# ───────────────────────────────
-
-
-@app.post("/test-email")
-def test_send_email(
-    to: str = "gclark0812@gmail.com", _: str = Depends(validate_key)
-) -> dict[str, str]:
-    """Send a one-off test email via SendGrid.
-
-    Pass a different recipient with ?to=someone@example.com if needed.
-    The endpoint returns JSON; detailed success/failure is logged to the
-    server console so you can inspect the SendGrid response.
-    """
-
-    subject = "Banshee test email"
-    body = (
-        "This is a test email from the /test-email endpoint to confirm "
-        "SendGrid credentials and deliverability. If you received this, "
-        "email sending is working 👍."
-    )
-
-    # Will raise RuntimeError if SendGrid responds with an error.
-    send_email(to, subject, body)
-
-    return {"status": "sent", "recipient": to}
-
-
-@app.get("/web", response_class=HTMLResponse)
-def web_ui(username: str = Depends(get_current_username)):
-    """Web UI for managing the watchlist."""
-    return """
-    <!DOCTYPE html>
-    <html>
-        <head>
-            <title>Banshee Watchlist Manager</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 40px; }
-                .container { max-width: 800px; margin: 0 auto; }
-                h1 { color: #333; }
-                .ticker-list { margin: 20px 0; }
-                .ticker-item { 
-                    padding: 10px;
-                    margin: 5px 0;
-                    background: #f5f5f5;
-                    border-radius: 4px;
-                }
-                .form-group { margin: 20px 0; }
-                input[type="text"] { 
-                    padding: 8px;
-                    margin-right: 10px;
-                    border: 1px solid #ddd;
-                    border-radius: 4px;
-                }
-                button {
-                    padding: 8px 16px;
-                    background: #007bff;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    cursor: pointer;
-                }
-                button:hover { background: #0056b3; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>Banshee Watchlist Manager</h1>
-                <div class="form-group">
-                    <input type="text" id="ticker" placeholder="Enter ticker symbol">
-                    <button onclick="addTicker()">Add Ticker</button>
-                </div>
-                <div class="ticker-list" id="tickerList">
-                    Loading tickers...
-                </div>
-            </div>
-            <script>
-                async function loadTickers() {
-                    const response = await fetch('/watchlist', {
-                        headers: { 'X-API-Key': 'test' }
-                    });
-                    const data = await response.json();
-                    const tickerList = document.getElementById('tickerList');
-                    tickerList.innerHTML = data.tickers.map(ticker => 
-                        `<div class="ticker-item">
-                            ${ticker}
-                            <button onclick="deleteTicker('${ticker}')">Delete</button>
-                        </div>`
-                    ).join('');
-                }
-
-                async function addTicker() {
-                    const ticker = document.getElementById('ticker').value.toUpperCase();
-                    if (!ticker) return;
-                    
-                    try {
-                        await fetch('/watchlist', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-API-Key': 'test'
-                            },
-                            body: JSON.stringify({ ticker, user: 'web' })
-                        });
-                        document.getElementById('ticker').value = '';
-                        loadTickers();
-                    } catch (error) {
-                        alert('Failed to add ticker: ' + error);
-                    }
-                }
-
-                async function deleteTicker(ticker) {
-                    try {
-                        await fetch(`/watchlist/${ticker}`, {
-                            method: 'DELETE',
-                            headers: { 'X-API-Key': 'test' }
-                        });
-                        loadTickers();
-                    } catch (error) {
-                        alert('Failed to delete ticker: ' + error);
-                    }
-                }
-
-                // Load tickers on page load
-                loadTickers();
-            </script>
-        </body>
-    </html>
-    """
-
 # Add logging to store methods
 def log_store_operation(operation: str, ticker: str):
     logger = logging.getLogger(__name__)
@@ -796,29 +577,3 @@ def remove_ticker_with_logging(ticker: str):
     log_store_operation("remove_ticker", ticker)
     return original_remove_ticker(ticker)
 store.remove_ticker = remove_ticker_with_logging
-
-@app.get("/email-queue")
-async def get_email_queue(_: str = Depends(validate_key)):
-    """Return everything currently in banshee-email-queue."""
-    logger = logging.getLogger(__name__)
-    logger.info("Received GET request for email queue")
-    try:
-        items = email_bucket.list_json()
-        logger.info("Successfully retrieved %d items from email queue", len(items))
-        return {"items": items}
-    except Exception as e:
-        logger.error("Error retrieving email queue: %s", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/earnings")
-async def get_earnings(_: str = Depends(validate_key)):
-    """Return everything currently in banshee-earnings."""
-    logger = logging.getLogger(__name__)
-    logger.info("Received GET request for earnings")
-    try:
-        items = calls_bucket.list_json()
-        logger.info("Successfully retrieved %d items from earnings", len(items))
-        return {"items": items}
-    except Exception as e:
-        logger.error("Error retrieving earnings: %s", str(e))
-        raise HTTPException(status_code=500, detail=str(e))
