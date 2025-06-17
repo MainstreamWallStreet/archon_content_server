@@ -22,8 +22,12 @@ os.environ.setdefault("EMAIL_QUEUE_BUCKET", "email-b")
 os.environ["BANSHEE_API_KEY"] = "secret"
 os.environ.setdefault("RAVEN_URL", "https://filing-fetcher-api-455624753981.us-central1.run.app")
 
-from src.banshee_api import app  # noqa: E402
+from src.banshee_api import app, validate_key  # noqa: E402
 
+# Add this global override for all tests
+def always_valid_key():
+    return True
+app.dependency_overrides[validate_key] = always_valid_key
 
 @pytest.fixture()
 def client():

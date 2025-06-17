@@ -353,7 +353,7 @@ async def _notify_raven(
         headers = {"X-API-Key": api_key}
         async with httpx.AsyncClient() as client:
             response = await client.post(url, json=payload, headers=headers)
-            response.raise_for_status()
+            await response.raise_for_status()
             logger.info("Successfully notified Raven to process %s", ticker)
     except httpx.HTTPError as e:
         error_msg = f"Failed to notify Raven for {ticker}: {str(e)}"

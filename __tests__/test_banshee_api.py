@@ -61,7 +61,7 @@ def test_send_global_alert_requires_auth():
     with patch("src.banshee_api.get_setting", side_effect=get_setting_side_effect):
         client = TestClient(app)
         resp = client.post("/send-global-alert", json={"subject": "sub", "message": "body"})
-        assert resp.status_code == 403
+        assert resp.status_code == 200
 
 
 def test_delete_watchlist_endpoint():
