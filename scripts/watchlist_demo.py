@@ -1,48 +1,66 @@
 #!/usr/bin/env python3
-"""Demonstrate adding and removing a watchlist item via the API."""
-
-from __future__ import annotations
+"""Demo script for watchlist API."""
 
 import os
-
 import requests
+import sys
 from dotenv import load_dotenv
-from google.cloud import storage
 
+load_dotenv()
 
-def _client() -> storage.Client:
-    """Return a Google Cloud Storage client targeting the default endpoint."""
-    return storage.Client()
+API_KEY = os.getenv("BANSHEE_API_KEY")
+if not API_KEY:
+    print("Error: BANSHEE_API_KEY not found in .env file.", file=sys.stderr)
+    sys.exit(1)
 
+BASE_URL = "http://localhost:8080"
+TIMEOUT = 10  # seconds
 
-def _check_exists(bucket: storage.Bucket, path: str) -> bool:
-    return bucket.blob(path).exists()
+def log_request_info(endpoint):
+    print(f"Hitting URL: {endpoint}")
+    print(f"Using API key (first 10 chars): {API_KEY[:10]}")
 
+def delete_ticker(ticker):
+    """Delete a ticker from the watchlist."""
+    endpoint = f"{BASE_URL}/watchlist/tickers/{ticker}"
+    log_request_info(endpoint)
+    print(f"Deleting {ticker} from watchlist...")
+    try:
+        resp = requests.delete(endpoint, headers={"X-API-Key": API_KEY}, timeout=TIMEOUT)
+        if resp.status_code == 404:
+            print(f"{ticker} not found in watchlist.")
+        else:
+            resp.raise_for_status()
+            print(f"Successfully deleted {ticker}.")
+    except requests.Timeout:
+        print(f"Error: DELETE request timed out after {TIMEOUT} seconds.", file=sys.stderr)
+        sys.exit(1)
 
-def main() -> None:
-    load_dotenv()
-    api_key = os.environ["BANSHEE_API_KEY"]
-    bucket_name = os.environ["BANSHEE_DATA_BUCKET"]
-    host = os.environ.get("BANSHEE_HOST", "http://localhost:8080")
-    ticker = os.environ.get("DEMO_TICKER", "AAPL").upper()
-    gcs = _client()
-    bucket = gcs.bucket(bucket_name)
+def add_ticker(ticker):
+    """Add a ticker to the watchlist."""
+    endpoint = f"{BASE_URL}/watchlist/tickers"
+    log_request_info(endpoint)
+    print(f"Adding {ticker} to watchlist...")
+    try:
+        resp = requests.post(endpoint, json={"ticker": ticker}, headers={"X-API-Key": API_KEY}, timeout=TIMEOUT)
+        resp.raise_for_status()
+        print(f"Successfully added {ticker}.")
+    except requests.Timeout:
+        print(f"Error: POST request timed out after {TIMEOUT} seconds.", file=sys.stderr)
+        sys.exit(1)
 
-    headers = {"X-API-Key": api_key}
-
-    print(f"Adding {ticker} to watchlist…")
-    resp = requests.post(
-        f"{host}/watchlist", json={"ticker": ticker, "user": "demo"}, headers=headers
-    )
-    resp.raise_for_status()
-    path = f"watchlist/{ticker}.json"
-    print("Exists after add:", _check_exists(bucket, path))
-
-    print(f"Removing {ticker} from watchlist…")
-    resp = requests.delete(f"{host}/watchlist/{ticker}", headers=headers)
-    resp.raise_for_status()
-    print("Exists after delete:", _check_exists(bucket, path))
-
+def main():
+    ticker = "AAPL"
+    try:
+        # First, delete the ticker if it exists
+        delete_ticker(ticker)
+        # Then add it
+        add_ticker(ticker)
+        # Finally, delete it again
+        delete_ticker(ticker)
+    except requests.exceptions.RequestException as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

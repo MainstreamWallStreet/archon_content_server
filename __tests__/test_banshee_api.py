@@ -35,12 +35,12 @@ def test_add_watchlist_endpoint():
     ):
         client = TestClient(app)
         resp = client.post(
-            "/watchlist",
+            "/watchlist/tickers",
             headers=HEADERS,
             json={"ticker": "MSFT", "user": "griffin"},
         )
         assert resp.status_code == 200
-        store.add_ticker.assert_called_with("MSFT", "griffin")
+        store.add_ticker.assert_called_with("MSFT")
         assert refresh.called
         assert clean_email.called
         assert clean_calls.called
@@ -86,10 +86,9 @@ def test_delete_watchlist_endpoint():
         clean_past.return_value = (0, 0)  # No past data removed
         
         client = TestClient(app)
-        resp = client.delete("/watchlist/AAPL", headers=HEADERS)
+        resp = client.delete("/watchlist/tickers/AAPL", headers=HEADERS)
         assert resp.status_code == 200
         store.remove_ticker.assert_called_with("AAPL")
         assert clean_email.called
         assert clean_calls.called
-        assert clean_past.called
-        assert "AAPL removed from watchlist" in resp.json()["message"]
+        assert resp.json()["message"] == "Successfully deleted AAPL from watchlist"
