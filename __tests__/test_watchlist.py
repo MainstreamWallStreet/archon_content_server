@@ -1,69 +1,146 @@
 import json
-from unittest.mock import Mock, patch
-
 import pytest
-
-from src.banshee_watchlist import BansheeStore
-
-
-@pytest.fixture
-def mock_storage_client():
-    with patch("google.cloud.storage.Client") as mock_client, patch("src.banshee_watchlist.send_alert") as _:
-        mock_bucket = Mock()
-        created_blobs: list[Mock] = []
-        mock_client.return_value.bucket.return_value = mock_bucket
-
-        # Each call to bucket.blob() returns a new blob mock (exists() -> False)
-        def _make_blob(*args, **kwargs):
-            blob = Mock()
-            blob.exists.return_value = False
-            created_blobs.append(blob)
-            return blob
-
-        mock_bucket.blob.side_effect = _make_blob
-        mock_bucket.created_blobs = created_blobs
-        mock_bucket.exists.return_value = True
-        yield mock_client
+from unittest.mock import patch, AsyncMock
+import httpx
+from datetime import datetime
 
 
-@pytest.fixture
-def store(mock_storage_client):
-    return BansheeStore("test-bucket")
+class InMemoryStore:
+    def __init__(self):
+        self.file = "[]"
+
+    def list_tickers(self):
+        return json.loads(self.file)
+
+    def add_ticker(self, ticker: str, user: str | None = None):
+        tickers = json.loads(self.file)
+        t = ticker.upper()
+        if t in tickers:
+            raise ValueError("duplicate")
+        tickers.append(t)
+        self.file = json.dumps(tickers)
+
+    def remove_ticker(self, ticker: str):
+        tickers = json.loads(self.file)
+        t = ticker.upper()
+        if t not in tickers:
+            raise ValueError("missing")
+        tickers.remove(t)
+        self.file = json.dumps(tickers)
 
 
-def test_add_ticker_saves_json(store):
-    store.add_ticker("AAPL", "griffin")
-    store._bucket.blob.assert_called_with("watchlist/AAPL.json")
-    # Find the blob that was written by add_ticker
-    written_blob = next(b for b in store._bucket.created_blobs if b.upload_from_string.called)
-    payload = written_blob.upload_from_string.call_args[0][0]
-    data = json.loads(payload)
-    assert data["name"] == "AAPL"
-    assert data["created_by_user"] == "griffin"
+@pytest.fixture(autouse=True)
+def patch_store(monkeypatch):
+    store = InMemoryStore()
+    monkeypatch.setattr("src.banshee_api.store", store)
+    return store
 
 
-def test_list_tickers_returns_names(store):
-    mock_blob1 = Mock()
-    mock_blob1.name = "watchlist/AAPL.json"
-    mock_blob2 = Mock()
-    mock_blob2.name = "watchlist/MSFT.json"
-    store._client.list_blobs.return_value = [mock_blob1, mock_blob2]
-    tickers = store.list_tickers()
-    assert tickers == ["AAPL", "MSFT"]
+@pytest.fixture(autouse=True)
+def patch_raven_url(monkeypatch):
+    monkeypatch.setenv("RAVEN_URL", "http://test-raven")
 
 
-def test_schedule_and_update_call(store):
-    call = {
-        "ticker": "AAPL",
-        "call_date": "2025-07-30",
-        "call_time": "2025-07-30T14:00:00Z",
-        "status": "scheduled",
-    }
-    store.schedule_call(call)
-    store._bucket.blob.assert_called_with("earnings_queue/AAPL/2025-07-30.json")
-    store._bucket.blob.return_value.download_as_text.return_value = json.dumps(call)
-    store.update_call_status("AAPL", "2025-07-30", "sent_to_raven")
-    uploaded = store._bucket.blob.return_value.upload_from_string.call_args_list[-1][0][
-        0
-    ]
-    assert json.loads(uploaded)["status"] == "sent_to_raven"
+def test_add_ticker_writes_array(client, patch_store):
+    with patch("src.banshee_api._notify_raven", new_callable=AsyncMock):
+        resp = client.post(
+            "/watchlist", json={"ticker": "AAPL"}, headers={"X-API-Key": "secret"}
+        )
+        assert resp.status_code == 200
+        assert patch_store.file == json.dumps(["AAPL"])
+
+
+def test_add_duplicate_returns_409(client, patch_store):
+    with patch("src.banshee_api._notify_raven", new_callable=AsyncMock):
+        client.post("/watchlist", json={"ticker": "AAPL"}, headers={"X-API-Key": "secret"})
+        resp = client.post(
+            "/watchlist", json={"ticker": "AAPL"}, headers={"X-API-Key": "secret"}
+        )
+        assert resp.status_code == 409
+
+
+def test_delete_ticker_updates_file(client, patch_store):
+    with patch("src.banshee_api._notify_raven", new_callable=AsyncMock):
+        client.post("/watchlist", json={"ticker": "AAPL"}, headers={"X-API-Key": "secret"})
+        resp = client.delete("/watchlist/AAPL", headers={"X-API-Key": "secret"})
+        assert resp.status_code == 200
+        assert patch_store.file == "[]"
+
+
+@pytest.mark.asyncio
+async def test_notify_raven_success():
+    """Test successful notification to Raven API."""
+    mock_response = AsyncMock()
+    mock_response.raise_for_status = AsyncMock()
+    
+    with patch("httpx.AsyncClient.post", return_value=mock_response) as mock_post:
+        from src.banshee_api import _notify_raven
+        await _notify_raven("AAPL", year=2024)
+        
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        assert call_args[0][0] == "http://test-raven/process"
+        assert call_args[1]["json"] == {
+            "ticker": "AAPL",
+            "year": 2024,
+            "point_of_origin": "banshee",
+            "include_transcript": True
+        }
+
+
+@pytest.mark.asyncio
+async def test_notify_raven_http_error():
+    """Test handling of HTTP errors from Raven API."""
+    class MockResponse:
+        async def raise_for_status(self):
+            raise httpx.HTTPError("Test error")
+    async def mock_post(*args, **kwargs):
+        return MockResponse()
+    mock_client = AsyncMock()
+    mock_client.post = mock_post
+    mock_async_client = AsyncMock()
+    mock_async_client.__aenter__.return_value = mock_client
+    
+    with patch("httpx.AsyncClient", return_value=mock_async_client):
+        from src.banshee_api import _notify_raven
+        with pytest.raises(RuntimeError, match="Failed to notify Raven for AAPL"):
+            await _notify_raven("AAPL")
+
+
+@pytest.mark.asyncio
+async def test_notify_raven_unexpected_error():
+    """Test handling of unexpected errors."""
+    with patch("httpx.AsyncClient.post", side_effect=Exception("Unexpected error")):
+        from src.banshee_api import _notify_raven
+        with pytest.raises(RuntimeError, match="Unexpected error notifying Raven for AAPL"):
+            await _notify_raven("AAPL")
+
+
+@pytest.mark.asyncio
+async def test_notify_raven_missing_url():
+    """Test handling of missing RAVEN_URL environment variable."""
+    with patch("src.banshee_api.get_setting", return_value=None):
+        from src.banshee_api import _notify_raven
+        with pytest.raises(RuntimeError, match="RAVEN_URL environment variable is not set"):
+            await _notify_raven("AAPL")
+
+
+@pytest.mark.asyncio
+async def test_notify_raven_with_quarter():
+    """Test notification with quarter parameter."""
+    mock_response = AsyncMock()
+    mock_response.raise_for_status = AsyncMock()
+    
+    with patch("httpx.AsyncClient.post", return_value=mock_response) as mock_post:
+        from src.banshee_api import _notify_raven
+        await _notify_raven("AAPL", year=2024, quarter=2)
+        
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        assert call_args[1]["json"] == {
+            "ticker": "AAPL",
+            "year": 2024,
+            "point_of_origin": "banshee",
+            "include_transcript": True,
+            "quarter": 2
+        }

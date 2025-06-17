@@ -7,9 +7,11 @@ from datetime import datetime, timezone
 import logging
 import json
 
-from fastapi import Depends, FastAPI, HTTPException, Security
-from fastapi.security import APIKeyHeader
+from fastapi import Depends, FastAPI, HTTPException, Security, Response
+from fastapi.security import APIKeyHeader, HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
+from fastapi.responses import HTMLResponse
+import secrets
 
 from src.notifications import send_alert, send_email
 
@@ -25,6 +27,19 @@ from src.earnings_alerts import (
 )
 
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key")
+
+security = HTTPBasic()
+
+def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
+    correct_username = secrets.compare_digest(credentials.username, "user")
+    correct_password = secrets.compare_digest(credentials.password, get_setting("BANSHEE_WEB_PASSWORD", default=""))
+    if not (correct_username and correct_password):
+        raise HTTPException(
+            status_code=401,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
 
 
 def validate_key(api_key: str = Security(API_KEY_HEADER)) -> str:
@@ -326,11 +341,65 @@ def send_global_alert(
     return {"status": "sent"}
 
 
-async def _notify_raven(ticker: str) -> None:
-    """Notify Raven about a new ticker."""
-    url = get_setting("RAVEN_URL", default="http://raven") + "/notes"
-    async with httpx.AsyncClient() as client:
-        await client.post(url, json={"ticker": ticker})
+async def _notify_raven(
+    ticker: str,
+    year: int | None = None,
+    point_of_origin: str = "banshee",
+    include_transcript: bool = True,
+    quarter: int | None = None
+) -> None:
+    """Notify Raven to process filings and/or transcripts for a ticker.
+    
+    Args:
+        ticker: The stock ticker symbol to process
+        year: The year to process (defaults to current year)
+        point_of_origin: The origin of the request (defaults to "banshee")
+        include_transcript: Whether to include transcript processing (defaults to True)
+        quarter: The quarter to process (optional)
+        
+    Raises:
+        RuntimeError: If the Raven API request fails
+    """
+    logger = logging.getLogger(__name__)
+    
+    # Get and validate Raven URL
+    url = get_setting("RAVEN_URL", default="http://raven")
+    if not url:
+        raise RuntimeError("RAVEN_URL environment variable is not set")
+        
+    # Ensure URL has proper scheme
+    if not url.startswith(("http://", "https://")):
+        url = "http://" + url
+    url = url.rstrip("/") + "/process"
+    
+    # Set default year if not provided
+    if year is None:
+        year = datetime.now().year
+        
+    # Prepare request payload
+    payload = {
+        "ticker": ticker.upper(),
+        "year": year,
+        "point_of_origin": point_of_origin,
+        "include_transcript": include_transcript
+    }
+    if quarter is not None:
+        payload["quarter"] = quarter
+        
+    try:
+        logger.info("Notifying Raven to process %s for year %d", ticker, year)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload)
+            await response.raise_for_status()
+            logger.info("Successfully notified Raven to process %s", ticker)
+    except httpx.HTTPError as e:
+        error_msg = f"Failed to notify Raven for {ticker}: {str(e)}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg) from e
+    except Exception as e:
+        error_msg = f"Unexpected error notifying Raven for {ticker}: {str(e)}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg) from e
 
 
 async def _fetch_api_ninjas(ticker: str) -> list[dict]:
@@ -637,3 +706,106 @@ def test_send_email(
     send_email(to, subject, body)
 
     return {"status": "sent", "recipient": to}
+
+
+@app.get("/web", response_class=HTMLResponse)
+def web_ui(username: str = Depends(get_current_username)):
+    """Web UI for managing the watchlist."""
+    return """
+    <!DOCTYPE html>
+    <html>
+        <head>
+            <title>Banshee Watchlist Manager</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; }
+                .container { max-width: 800px; margin: 0 auto; }
+                h1 { color: #333; }
+                .ticker-list { margin: 20px 0; }
+                .ticker-item { 
+                    padding: 10px;
+                    margin: 5px 0;
+                    background: #f5f5f5;
+                    border-radius: 4px;
+                }
+                .form-group { margin: 20px 0; }
+                input[type="text"] { 
+                    padding: 8px;
+                    margin-right: 10px;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                }
+                button {
+                    padding: 8px 16px;
+                    background: #007bff;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                }
+                button:hover { background: #0056b3; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Banshee Watchlist Manager</h1>
+                <div class="form-group">
+                    <input type="text" id="ticker" placeholder="Enter ticker symbol">
+                    <button onclick="addTicker()">Add Ticker</button>
+                </div>
+                <div class="ticker-list" id="tickerList">
+                    Loading tickers...
+                </div>
+            </div>
+            <script>
+                async function loadTickers() {
+                    const response = await fetch('/watchlist', {
+                        headers: { 'X-API-Key': 'test' }
+                    });
+                    const data = await response.json();
+                    const tickerList = document.getElementById('tickerList');
+                    tickerList.innerHTML = data.tickers.map(ticker => 
+                        `<div class="ticker-item">
+                            ${ticker}
+                            <button onclick="deleteTicker('${ticker}')">Delete</button>
+                        </div>`
+                    ).join('');
+                }
+
+                async function addTicker() {
+                    const ticker = document.getElementById('ticker').value.toUpperCase();
+                    if (!ticker) return;
+                    
+                    try {
+                        await fetch('/watchlist', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-API-Key': 'test'
+                            },
+                            body: JSON.stringify({ ticker, user: 'web' })
+                        });
+                        document.getElementById('ticker').value = '';
+                        loadTickers();
+                    } catch (error) {
+                        alert('Failed to add ticker: ' + error);
+                    }
+                }
+
+                async function deleteTicker(ticker) {
+                    try {
+                        await fetch(`/watchlist/${ticker}`, {
+                            method: 'DELETE',
+                            headers: { 'X-API-Key': 'test' }
+                        });
+                        loadTickers();
+                    } catch (error) {
+                        alert('Failed to delete ticker: ' + error);
+                    }
+                }
+
+                // Load tickers on page load
+                loadTickers();
+            </script>
+        </body>
+    </html>
+    """
