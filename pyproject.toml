@@ -2,7 +2,7 @@
 # Pytest arguments kept minimal for compatibility
 addopts = ""
 pythonpath = ["."]
-testpaths = ["tests"]
+testpaths = ["__tests__"]
 python_files = ["test_*.py"]
 markers = ["asyncio: mark test as async"]
 
