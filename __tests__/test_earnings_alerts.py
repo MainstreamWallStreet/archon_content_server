@@ -135,3 +135,80 @@ def test_send_due_emails_dispatches(buckets):
         send_due_emails(bucket, now=now)
         send_alert.assert_called_once()
         delete.assert_called_once()
+
+
+def test_cleanup_duplicate_emails_removes_duplicates(buckets):
+    _, _ = buckets
+    bucket = GcsBucket("email-b")
+    
+    # Create test data with duplicates
+    test_emails = [
+        ("queue/AAPL/old1.json", {"ticker": "AAPL", "call_time": "2025-08-01T13:00:00+00:00", "kind": "one_week"}),
+        ("queue/AAPL/old2.json", {"ticker": "AAPL", "call_time": "2025-08-01T13:00:00+00:00", "kind": "one_week"}),
+        ("queue/AAPL/new.json", {"ticker": "AAPL", "call_time": "2025-08-01T13:00:00+00:00", "kind": "one_week"}),
+        ("queue/AAPL/different.json", {"ticker": "AAPL", "call_time": "2025-08-02T13:00:00+00:00", "kind": "one_week"}),
+    ]
+    
+    with patch.object(bucket, "list_json", return_value=test_emails), \
+         patch.object(bucket, "delete") as delete:
+        
+        from src.earnings_alerts import cleanup_duplicate_emails
+        removed_count = cleanup_duplicate_emails(bucket, "AAPL", "2025-08-01T13:00:00+00:00", "one_week")
+        
+        # Should remove 3 emails (old1, old2, new) for the specific call_time/kind combination
+        assert removed_count == 3
+        assert delete.call_count == 3
+
+
+def test_cleanup_ticker_emails_removes_all_for_ticker(buckets):
+    _, _ = buckets
+    bucket = GcsBucket("email-b")
+    
+    # Create test data
+    all_emails = [
+        ("queue/AAPL/email1.json", {"ticker": "AAPL", "call_time": "2025-08-01T13:00:00+00:00", "kind": "one_week"}),
+        ("queue/AAPL/email2.json", {"ticker": "AAPL", "call_time": "2025-08-01T13:00:00+00:00", "kind": "tomorrow"}),
+        ("queue/MSFT/email3.json", {"ticker": "MSFT", "call_time": "2025-08-01T13:00:00+00:00", "kind": "one_week"}),
+    ]
+    
+    def mock_list_json(prefix):
+        if prefix == "queue/AAPL/":
+            return [email for email in all_emails if email[0].startswith("queue/AAPL/")]
+        elif prefix == "queue/":
+            return all_emails
+        else:
+            return []
+    
+    with patch.object(bucket, "list_json", side_effect=mock_list_json), \
+         patch.object(bucket, "delete") as delete:
+        
+        from src.earnings_alerts import cleanup_ticker_emails
+        removed_count = cleanup_ticker_emails(bucket, "AAPL")
+        
+        # Should remove 2 emails for AAPL, keep MSFT
+        assert removed_count == 2
+        assert delete.call_count == 2
+
+
+def test_cleanup_all_duplicate_emails_removes_system_duplicates(buckets):
+    _, _ = buckets
+    bucket = GcsBucket("email-b")
+    
+    # Create test data with duplicates across different tickers
+    test_emails = [
+        ("queue/AAPL/old1.json", {"ticker": "AAPL", "call_time": "2025-08-01T13:00:00+00:00", "kind": "one_week"}),
+        ("queue/AAPL/new1.json", {"ticker": "AAPL", "call_time": "2025-08-01T13:00:00+00:00", "kind": "one_week"}),
+        ("queue/MSFT/old2.json", {"ticker": "MSFT", "call_time": "2025-08-01T13:00:00+00:00", "kind": "one_week"}),
+        ("queue/MSFT/new2.json", {"ticker": "MSFT", "call_time": "2025-08-01T13:00:00+00:00", "kind": "one_week"}),
+        ("queue/AAPL/unique.json", {"ticker": "AAPL", "call_time": "2025-08-02T13:00:00+00:00", "kind": "one_week"}),
+    ]
+    
+    with patch.object(bucket, "list_json", return_value=test_emails), \
+         patch.object(bucket, "delete") as delete:
+        
+        from src.earnings_alerts import cleanup_all_duplicate_emails
+        removed_count = cleanup_all_duplicate_emails(bucket)
+        
+        # Should remove 2 duplicates (old1 and old2), keep new1, new2, and unique
+        assert removed_count == 2
+        assert delete.call_count == 2

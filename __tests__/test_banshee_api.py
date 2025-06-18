@@ -42,27 +42,24 @@ def test_delete_watchlist_endpoint():
     ) as calls_bucket, patch(
         "src.banshee_api.email_bucket"
     ) as email_bucket, patch(
-        "src.banshee_api.cleanup_email_queue"
-    ) as clean_email, patch(
-        "src.banshee_api.cleanup_calls_queue"
-    ) as clean_calls, patch(
-        "src.banshee_api.cleanup_past_data"
-    ) as clean_past, patch("src.banshee_api.get_setting", side_effect=get_setting_side_effect):
+        "src.banshee_api.cleanup_ticker_emails"
+    ) as clean_ticker_emails, patch(
+        "src.banshee_api.get_setting", side_effect=get_setting_side_effect):
         store.list_tickers.return_value = ["AAPL", "MSFT"]
-        calls_bucket.list_json.return_value = []
-        email_bucket.list_json.return_value = []
+        calls_bucket.list_json.return_value = [
+            ("calls/AAPL/2025-08-01.json", {"ticker": "AAPL", "call_date": "2025-08-01"}),
+            ("calls/MSFT/2025-08-02.json", {"ticker": "MSFT", "call_date": "2025-08-02"}),
+        ]
         
         # Mock cleanup functions to return counts
-        clean_calls.return_value = 1  # 1 call removed
-        clean_email.return_value = 2  # 2 emails removed
-        clean_past.return_value = (0, 0)  # No past data removed
+        clean_ticker_emails.return_value = 3  # 3 emails removed
         
         client = TestClient(app)
         resp = client.delete("/watchlist/tickers/AAPL", headers=HEADERS)
         assert resp.status_code == 200
         store.remove_ticker.assert_called_with("AAPL")
-        assert clean_email.called
-        assert clean_calls.called
+        assert clean_ticker_emails.called
+        assert calls_bucket.delete.called  # Should delete AAPL call
         assert resp.json()["message"] == "Successfully deleted AAPL from watchlist"
 
 
@@ -287,3 +284,19 @@ def test_task_endpoints_error_handling():
         data = resp.json()
         assert "detail" in data
         assert "Test error" in data["detail"]
+
+
+def test_cleanup_duplicates_endpoint():
+    """Test the cleanup duplicates endpoint."""
+    with patch("src.banshee_api.cleanup_all_duplicate_emails") as mock_cleanup, \
+         patch("src.banshee_api.get_setting", side_effect=get_setting_side_effect):
+        
+        mock_cleanup.return_value = 15  # 15 duplicates removed
+        
+        client = TestClient(app)
+        resp = client.post("/tasks/cleanup-duplicates", headers=HEADERS)
+        
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["message"] == "Duplicate cleanup completed successfully, removed 15 emails"
+        mock_cleanup.assert_called_once()
