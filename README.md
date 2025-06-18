@@ -11,7 +11,37 @@ Banshee is a FastAPI-based backend for managing stock watchlists, earnings alert
 - **SendGrid Integration**: Email notifications for alerts and system events.
 - **API Key and Basic Auth Security**: Protects endpoints with API keys and/or basic authentication.
 - **Automated Data Sync**: Scheduled tasks for syncing earnings data and sending queued emails.
+- **Self-Contained Background Scheduler**: All periodic jobs run inside the server—no external cron or cloud scheduler needed.
 - **Comprehensive Test Suite**: Includes robust async and endpoint tests.
+
+## Background Scheduler: How Banshee Automates Everything
+
+Banshee includes a built-in, self-contained background scheduler that automates all periodic operations. This means you do **not** need to set up any external cron jobs, Google Cloud Scheduler, or other automation tools. If the server is running, your jobs are running.
+
+### What the Scheduler Does
+
+- **Daily Sync (00:00 UTC / 19:00 EST)**
+  - Refreshes upcoming earnings calls for all tickers
+  - Queues reminder emails (1 week, 1 day, and 1 hour before each call)
+  - Cleans up old/past data
+- **Hourly Email Dispatch**
+  - Scans the email queue for any emails due in the next hour
+  - Sends those emails and removes them from the queue
+- **Manual Triggers**
+  - You can still trigger these operations manually via `/tasks/daily-sync`, `/tasks/upcoming-sync`, and `/tasks/send-queued-emails` endpoints
+
+### How It Works
+
+- The scheduler is started automatically when the FastAPI app starts, and stopped when the app shuts down.
+- Uses Python's `asyncio` for non-blocking background tasks.
+- All logic is covered by tests, and you can manually trigger syncs via API endpoints.
+- No external dependencies: works the same in local dev, staging, or production.
+
+### Why This Design?
+
+- **Self-contained**: No ops or cloud setup required.
+- **Portable**: Works anywhere you run the server.
+- **Reliable**: If the server is running, your periodic jobs are running.
 
 ## Requirements
 

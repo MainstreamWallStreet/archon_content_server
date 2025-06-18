@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from unittest.mock import patch
+from unittest.mock import AsyncMock
 
 from src.banshee_api import app
 
@@ -151,3 +152,138 @@ def test_get_earnings_endpoint_error_handling():
         data = resp.json()
         assert "detail" in data
         assert "GCS connection failed" in data["detail"]
+
+
+def test_daily_sync_endpoint():
+    """Test the daily sync endpoint."""
+    with patch("src.banshee_api.get_scheduler") as mock_get_scheduler, \
+         patch("src.banshee_api.refresh_upcoming_calls") as mock_refresh, \
+         patch("src.banshee_api.cleanup_past_data") as mock_cleanup, \
+         patch("src.banshee_api.get_setting", side_effect=get_setting_side_effect):
+        
+        # Mock scheduler with trigger method
+        mock_scheduler = AsyncMock()
+        mock_get_scheduler.return_value = mock_scheduler
+        
+        client = TestClient(app)
+        resp = client.post("/tasks/daily-sync", headers=HEADERS)
+        
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["message"] == "Daily sync completed successfully"
+        mock_scheduler.trigger_daily_sync.assert_called_once()
+
+
+def test_daily_sync_endpoint_fallback():
+    """Test the daily sync endpoint fallback when scheduler is not available."""
+    with patch("src.banshee_api.get_scheduler", return_value=None), \
+         patch("src.banshee_api.refresh_upcoming_calls") as mock_refresh, \
+         patch("src.banshee_api.cleanup_past_data") as mock_cleanup, \
+         patch("src.banshee_api.get_setting", side_effect=get_setting_side_effect):
+        
+        client = TestClient(app)
+        resp = client.post("/tasks/daily-sync", headers=HEADERS)
+        
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["message"] == "Daily sync completed successfully"
+        mock_refresh.assert_called_once()
+        mock_cleanup.assert_called_once()
+
+
+def test_upcoming_sync_endpoint():
+    """Test the upcoming sync endpoint."""
+    with patch("src.banshee_api.refresh_upcoming_calls") as mock_refresh, \
+         patch("src.banshee_api.get_setting", side_effect=get_setting_side_effect):
+        
+        client = TestClient(app)
+        resp = client.post("/tasks/upcoming-sync", headers=HEADERS)
+        
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["message"] == "Upcoming sync completed successfully"
+        mock_refresh.assert_called_once()
+
+
+def test_send_queued_emails_endpoint():
+    """Test the send queued emails endpoint."""
+    with patch("src.banshee_api.get_scheduler") as mock_get_scheduler, \
+         patch("src.banshee_api.send_due_emails") as mock_send, \
+         patch("src.banshee_api.get_setting", side_effect=get_setting_side_effect):
+        
+        # Mock scheduler with trigger method
+        mock_scheduler = AsyncMock()
+        mock_get_scheduler.return_value = mock_scheduler
+        
+        client = TestClient(app)
+        resp = client.post("/tasks/send-queued-emails", headers=HEADERS)
+        
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["message"] == "Queued emails processed successfully"
+        mock_scheduler.trigger_email_dispatch.assert_called_once()
+
+
+def test_send_queued_emails_endpoint_fallback():
+    """Test the send queued emails endpoint fallback when scheduler is not available."""
+    with patch("src.banshee_api.get_scheduler", return_value=None), \
+         patch("src.banshee_api.send_due_emails") as mock_send, \
+         patch("src.banshee_api.get_setting", side_effect=get_setting_side_effect):
+        
+        client = TestClient(app)
+        resp = client.post("/tasks/send-queued-emails", headers=HEADERS)
+        
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["message"] == "Queued emails processed successfully"
+        mock_send.assert_called_once()
+
+
+def test_task_endpoints_require_auth():
+    """Test that task endpoints require authentication."""
+    with patch("src.banshee_api.get_scheduler", return_value=None), \
+         patch("src.banshee_api.refresh_upcoming_calls") as mock_refresh, \
+         patch("src.banshee_api.cleanup_past_data") as mock_cleanup, \
+         patch("src.banshee_api.send_due_emails") as mock_send, \
+         patch("src.banshee_api.get_setting", side_effect=get_setting_side_effect):
+        
+        # Remove the dependency override to test actual authentication
+        from src.banshee_api import validate_key
+        original_override = app.dependency_overrides.get(validate_key)
+        app.dependency_overrides.pop(validate_key, None)
+        
+        try:
+            client = TestClient(app)
+            
+            # Test without API key
+            resp = client.post("/tasks/daily-sync")
+            assert resp.status_code == 403
+            
+            resp = client.post("/tasks/upcoming-sync")
+            assert resp.status_code == 403
+            
+            resp = client.post("/tasks/send-queued-emails")
+            assert resp.status_code == 403
+        finally:
+            # Restore the dependency override
+            if original_override:
+                app.dependency_overrides[validate_key] = original_override
+
+
+def test_task_endpoints_error_handling():
+    """Test error handling in task endpoints."""
+    with patch("src.banshee_api.get_scheduler") as mock_get_scheduler, \
+         patch("src.banshee_api.get_setting", side_effect=get_setting_side_effect):
+        
+        # Mock scheduler that raises an exception
+        mock_scheduler = AsyncMock()
+        mock_scheduler.trigger_daily_sync.side_effect = Exception("Test error")
+        mock_get_scheduler.return_value = mock_scheduler
+        
+        client = TestClient(app)
+        resp = client.post("/tasks/daily-sync", headers=HEADERS)
+        
+        assert resp.status_code == 500
+        data = resp.json()
+        assert "detail" in data
+        assert "Test error" in data["detail"]

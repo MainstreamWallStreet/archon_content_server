@@ -26,6 +26,7 @@ from src.earnings_alerts import (
     cleanup_past_data,
     send_due_emails,
 )
+from src.scheduler import BansheeScheduler, get_scheduler, set_scheduler
 
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key")
 
@@ -44,9 +45,14 @@ def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
 
 
 def validate_key(api_key: str = Security(API_KEY_HEADER)) -> str:
-    expected = get_setting("BANSHEE_API_KEY")
-    if api_key != expected:
-        raise HTTPException(status_code=403, detail="Invalid API key")
+    """Validate the API key."""
+    expected_key = get_setting("BANSHEE_API_KEY")
+    if not secrets.compare_digest(api_key, expected_key):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key",
+            headers={"WWW-Authenticate": "APIKey"},
+        )
     return api_key
 
 
@@ -54,6 +60,10 @@ store = BansheeStore(get_setting("BANSHEE_DATA_BUCKET"))
 calls_bucket = GcsBucket(get_setting("EARNINGS_BUCKET"))
 email_bucket = GcsBucket(get_setting("EMAIL_QUEUE_BUCKET"))
 app = FastAPI(title="Banshee API", version="1.0")
+
+# Initialize the scheduler
+scheduler = BansheeScheduler(store, calls_bucket, email_bucket)
+set_scheduler(scheduler)
 
 
 class TickerPayload(BaseModel):
@@ -178,14 +188,14 @@ async def delete_ticker(ticker: str, _: str = Depends(validate_key)):
 async def list_tickers(_: str = Depends(validate_key)):
     """List all tickers in the watchlist."""
     logger = logging.getLogger(__name__)
-    logger.info("Received GET request for watchlist")
+    logger.info("Received GET request for watchlist tickers")
     
     try:
         tickers = store.list_tickers()
-        logger.info("Successfully retrieved %d tickers", len(tickers))
+        logger.info("Successfully retrieved %d tickers from watchlist", len(tickers))
         return {"tickers": tickers}
     except Exception as e:
-        logger.error("Error listing tickers: %s", str(e))
+        logger.error("Error retrieving tickers: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -311,6 +321,96 @@ async def get_earnings(_: str = Depends(validate_key)):
     except Exception as e:
         logger.error("Error retrieving earnings: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/tasks/daily-sync")
+async def daily_sync(_: str = Depends(validate_key)):
+    """Trigger daily sync of earnings and watchlist data."""
+    logger = logging.getLogger(__name__)
+    logger.info("Received POST request for daily sync")
+    
+    try:
+        scheduler_instance = get_scheduler()
+        if scheduler_instance:
+            await scheduler_instance.trigger_daily_sync()
+        else:
+            # Fallback to direct calls if scheduler not available
+            await refresh_upcoming_calls(store, calls_bucket, email_bucket)
+            cleanup_past_data(calls_bucket, email_bucket)
+            
+        logger.info("Daily sync completed successfully")
+        return {"message": "Daily sync completed successfully"}
+    except Exception as e:
+        logger.error("Error during daily sync: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/tasks/upcoming-sync")
+async def upcoming_sync(_: str = Depends(validate_key)):
+    """Trigger sync of upcoming earnings calls."""
+    logger = logging.getLogger(__name__)
+    logger.info("Received POST request for upcoming sync")
+    
+    try:
+        await refresh_upcoming_calls(store, calls_bucket, email_bucket)
+        logger.info("Upcoming sync completed successfully")
+        return {"message": "Upcoming sync completed successfully"}
+    except Exception as e:
+        logger.error("Error during upcoming sync: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/tasks/send-queued-emails")
+async def send_queued_emails(_: str = Depends(validate_key)):
+    """Send all queued emails that are due."""
+    logger = logging.getLogger(__name__)
+    logger.info("Received POST request for send queued emails")
+    
+    try:
+        scheduler_instance = get_scheduler()
+        if scheduler_instance:
+            await scheduler_instance.trigger_email_dispatch()
+        else:
+            # Fallback to direct call if scheduler not available
+            send_due_emails(email_bucket)
+            
+        logger.info("Queued emails processed successfully")
+        return {"message": "Queued emails processed successfully"}
+    except Exception as e:
+        logger.error("Error processing queued emails: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start the background scheduler when the application starts."""
+    logger = logging.getLogger(__name__)
+    logger.info("Starting Banshee API and background scheduler")
+    
+    try:
+        scheduler_instance = get_scheduler()
+        if scheduler_instance:
+            await scheduler_instance.start()
+            logger.info("Background scheduler started successfully")
+        else:
+            logger.warning("No scheduler instance found - background tasks will not run")
+    except Exception as e:
+        logger.error("Failed to start background scheduler: %s", str(e))
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop the background scheduler when the application shuts down."""
+    logger = logging.getLogger(__name__)
+    logger.info("Shutting down Banshee API and background scheduler")
+    
+    try:
+        scheduler_instance = get_scheduler()
+        if scheduler_instance:
+            await scheduler_instance.stop()
+            logger.info("Background scheduler stopped successfully")
+    except Exception as e:
+        logger.error("Failed to stop background scheduler: %s", str(e))
 
 
 async def _notify_raven(
