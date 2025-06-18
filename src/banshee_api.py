@@ -291,7 +291,7 @@ async def get_email_queue(_: str = Depends(validate_key)):
     logger = logging.getLogger(__name__)
     logger.info("Received GET request for email queue")
     try:
-        items = email_bucket.list_json()
+        items = email_bucket.list_json("queue/")
         logger.info("Successfully retrieved %d items from email queue", len(items))
         return {"items": items}
     except Exception as e:
@@ -305,7 +305,7 @@ async def get_earnings(_: str = Depends(validate_key)):
     logger = logging.getLogger(__name__)
     logger.info("Received GET request for earnings")
     try:
-        items = calls_bucket.list_json()
+        items = calls_bucket.list_json("calls/")
         logger.info("Successfully retrieved %d items from earnings", len(items))
         return {"items": items}
     except Exception as e:
