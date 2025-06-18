@@ -12,7 +12,7 @@ The deployment process is managed by Google Cloud Deploy, which uses a pipeline-
 
 This file defines the overall deployment pipeline:
 - Uses the `DeliveryPipeline` resource type
-- Named `raven-pipeline`
+- Named `banshee-pipeline`
 - Currently configured with a single stage targeting the `dev` environment
 - The pipeline is serial, meaning stages run one after another
 
@@ -28,18 +28,17 @@ Defines the deployment target for the development environment:
 
 Defines the Cloud Run service configuration:
 - Uses the Knative serving API (`serving.knative.dev/v1`)
-- Named `raven-api`
+- Named `banshee-api`
 - Key configurations:
   - Autoscaling: Minimum scale set to 0 (allows service to scale to zero when not in use)
-  - Service Account: Uses `cloud-run-raven-sa@mainstreamwallstreet.iam.gserviceaccount.com`
+  - Service Account: Uses `cloud-run-banshee-sa@mainstreamwallstreet.iam.gserviceaccount.com`
   - Container Port: 8080
   - Environment Variables: Securely managed through Google Cloud Secret Manager
-    - `OPENAI_API_KEY`
     - `API_NINJAS_KEY`
     - `RAVEN_API_KEY`
-  - Volume Mounts:
-    - `client_secret.json` for Google Cloud authentication
-    - `.env` file for environment configuration
+    - `BANSHEE_API_KEY`
+    - `SENDGRID_API_KEY`
+    - `RAVEN_URL` (static configuration)
 
 ## Deployment Flow
 
@@ -58,11 +57,17 @@ The deployment uses several security best practices:
 ## Environment Variables and Secrets
 
 The following secrets are required to be set up in Google Cloud Secret Manager:
-- `openai-api-key`
 - `api-ninjas-key`
 - `raven-api-key`
-- `client_secret_json`
-- `raven-env`
+- `banshee-api-key`
+- `sendgrid-api-key`
+- `banshee-google-sa-value`
+- `alert-from-email`
+- `alert-recipients`
+- `banshee-web-password`
+
+Static environment variables (configured in `service.yaml`):
+- `RAVEN_URL`: https://filing-fetcher-api-455624753981.us-central1.run.app
 
 ## Notes
 

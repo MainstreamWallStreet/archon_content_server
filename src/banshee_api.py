@@ -335,7 +335,7 @@ async def _notify_raven(
     logger = logging.getLogger(__name__)
     
     # Get and validate Raven URL
-    url = get_setting("RAVEN_URL", default="http://raven")
+    url = get_setting("RAVEN_URL", default="https://filing-fetcher-api-455624753981.us-central1.run.app")
     if not url:
         logger.error("RAVEN_URL environment variable is not set")
         raise RuntimeError("RAVEN_URL environment variable is not set")
