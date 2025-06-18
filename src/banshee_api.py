@@ -25,6 +25,8 @@ from src.earnings_alerts import (
     cleanup_calls_queue,
     cleanup_past_data,
     send_due_emails,
+    cleanup_all_duplicate_emails,
+    cleanup_ticker_emails,
 )
 from src.scheduler import BansheeScheduler, get_scheduler, set_scheduler
 
@@ -171,12 +173,21 @@ async def delete_ticker(ticker: str, _: str = Depends(validate_key)):
         store.remove_ticker(ticker)
         logger.info("Successfully removed ticker %s from store", ticker)
         
-        # Clean up related calls and emails
-        logger.info("Cleaning up calls queue for ticker %s", ticker)
-        cleanup_calls_queue(calls_bucket, set(tickers))
-        logger.info("Cleaning up email queue for ticker %s", ticker)
-        cleanup_email_queue(email_bucket, set(tickers))
-        logger.info("Successfully cleaned up queues for ticker %s", ticker)
+        # Clean up related calls and emails for the removed ticker
+        logger.info("Cleaning up calls for removed ticker %s", ticker)
+        
+        # Remove all calls for this ticker
+        calls_removed = 0
+        for path, data in calls_bucket.list_json(f"calls/{ticker}/"):
+            calls_bucket.delete(path)
+            calls_removed += 1
+            logger.info("Removed call for %s: %s", ticker, path)
+        
+        # Remove all emails for this ticker
+        emails_removed = cleanup_ticker_emails(email_bucket, ticker)
+        
+        logger.info("Successfully cleaned up %d calls and %d emails for ticker %s", 
+                   calls_removed, emails_removed, ticker)
         
         return {"message": f"Successfully deleted {ticker} from watchlist"}
     except Exception as e:
@@ -378,6 +389,21 @@ async def send_queued_emails(_: str = Depends(validate_key)):
         return {"message": "Queued emails processed successfully"}
     except Exception as e:
         logger.error("Error processing queued emails: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/tasks/cleanup-duplicates")
+async def cleanup_duplicates(_: str = Depends(validate_key)):
+    """Trigger cleanup of all duplicate emails in the system."""
+    logger = logging.getLogger(__name__)
+    logger.info("Received POST request for duplicate cleanup")
+    
+    try:
+        removed_count = cleanup_all_duplicate_emails(email_bucket)
+        logger.info("Duplicate cleanup completed successfully, removed %d emails", removed_count)
+        return {"message": f"Duplicate cleanup completed successfully, removed {removed_count} emails"}
+    except Exception as e:
+        logger.error("Error during duplicate cleanup: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 

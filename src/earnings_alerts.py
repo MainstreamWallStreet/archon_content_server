@@ -200,10 +200,17 @@ async def refresh_upcoming_calls(
                         logger.info("Send time %s for %s %s reminder is in the past (now: %s), skipping", 
                                   send_time.isoformat(), ticker, label, now.isoformat())
                         continue
+                    
+                    # Clean up any existing duplicate emails for this ticker/call/reminder type
+                    call_time_str = call_time.isoformat()
+                    duplicates_removed = cleanup_duplicate_emails(email_bucket, ticker, call_time_str, label)
+                    if duplicates_removed > 0:
+                        logger.info("Cleaned up %d duplicate email(s) for %s %s reminder", 
+                                  duplicates_removed, ticker, label)
                         
                     email_obj = {
                         "ticker": ticker,
-                        "call_time": call_time.isoformat(),
+                        "call_time": call_time_str,
                         "send_time": send_time.isoformat(),
                         "kind": label,
                     }
@@ -365,3 +372,109 @@ def send_due_emails(email_bucket: GcsBucket, *, now: datetime | None = None) -> 
             send_alert(subj, body)
             email_bucket.delete(path)
             logger.info("Dispatched email %s scheduled for %s", path, send_ts)
+
+
+def cleanup_duplicate_emails(email_bucket: GcsBucket, ticker: str, call_time: str, kind: str) -> int:
+    """Remove duplicate emails for the same ticker, call time, and reminder type.
+    
+    Args:
+        email_bucket: GCS bucket containing emails
+        ticker: Ticker symbol
+        call_time: ISO format call time
+        kind: Reminder type (one_week, tomorrow, one_hour)
+        
+    Returns:
+        int: Number of duplicate emails removed
+    """
+    removed_count = 0
+    for path, data in email_bucket.list_json(f"queue/{ticker}/"):
+        if (data.get("ticker") == ticker and 
+            data.get("call_time") == call_time and 
+            data.get("kind") == kind):
+            email_bucket.delete(path)
+            removed_count += 1
+            logger.info("Removed duplicate email for %s %s reminder: %s", 
+                      ticker, kind, path)
+    
+    if removed_count > 0:
+        logger.info("Removed %d duplicate email(s) for %s %s reminder", 
+                   removed_count, ticker, kind)
+    
+    return removed_count
+
+
+def cleanup_ticker_emails(email_bucket: GcsBucket, ticker: str) -> int:
+    """Remove all emails for a specific ticker.
+    
+    Args:
+        email_bucket: GCS bucket containing emails
+        ticker: Ticker symbol to remove emails for
+        
+    Returns:
+        int: Number of emails removed
+    """
+    removed_count = 0
+    for path, data in email_bucket.list_json(f"queue/{ticker}/"):
+        email_bucket.delete(path)
+        removed_count += 1
+        logger.info("Removed email for %s: %s", ticker, path)
+    
+    if removed_count > 0:
+        logger.info("Removed %d email(s) for ticker %s", removed_count, ticker)
+    
+    return removed_count
+
+
+def cleanup_all_duplicate_emails(email_bucket: GcsBucket) -> int:
+    """Remove all duplicate emails in the system.
+    
+    This function identifies and removes duplicate emails for the same
+    ticker, call time, and reminder type, keeping only the most recent one.
+    
+    Args:
+        email_bucket: GCS bucket containing emails
+        
+    Returns:
+        int: Total number of duplicate emails removed
+    """
+    total_removed = 0
+    processed_combinations = set()
+    
+    # Get all emails and group them by ticker/call_time/kind
+    all_emails = email_bucket.list_json("queue/")
+    email_groups = {}
+    
+    for path, data in all_emails:
+        ticker = data.get("ticker")
+        call_time = data.get("call_time")
+        kind = data.get("kind")
+        
+        if not all([ticker, call_time, kind]):
+            logger.warning("Invalid email data in %s, skipping", path)
+            continue
+            
+        key = (ticker, call_time, kind)
+        if key not in email_groups:
+            email_groups[key] = []
+        email_groups[key].append((path, data))
+    
+    # For each group, keep only the most recent email and remove duplicates
+    for (ticker, call_time, kind), emails in email_groups.items():
+        if len(emails) > 1:
+            # Sort by path (which includes timestamp from UUID) to get the most recent
+            emails.sort(key=lambda x: x[0], reverse=True)
+            
+            # Keep the first (most recent) one, remove the rest
+            for path, data in emails[1:]:
+                email_bucket.delete(path)
+                total_removed += 1
+                logger.info("Removed duplicate email for %s %s reminder: %s", 
+                          ticker, kind, path)
+            
+            logger.info("Kept most recent email for %s %s reminder, removed %d duplicates", 
+                      ticker, kind, len(emails) - 1)
+    
+    if total_removed > 0:
+        logger.info("Total duplicate emails removed: %d", total_removed)
+    
+    return total_removed
