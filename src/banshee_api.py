@@ -330,19 +330,22 @@ async def _notify_raven(
         quarter: The quarter to process (optional)
         
     Raises:
-        RuntimeError: If the Raven API request fails
+        RuntimeError: If the Raven API request fails after all retries
     """
     logger = logging.getLogger(__name__)
     
     # Get and validate Raven URL
-    url = get_setting("RAVEN_URL", default="http://raven")
+    url = get_setting("RAVEN_URL", default="https://filing-fetcher-api-455624753981.us-central1.run.app")
     if not url:
+        logger.error("RAVEN_URL environment variable is not set")
         raise RuntimeError("RAVEN_URL environment variable is not set")
         
     # Ensure URL has proper scheme
     if not url.startswith(("http://", "https://")):
         url = "http://" + url
     url = url.rstrip("/") + "/process"
+    
+    logger.info("Using Raven URL: %s", url)
     
     # Set default year if not provided
     if year is None:
@@ -358,24 +361,75 @@ async def _notify_raven(
     if quarter is not None:
         payload["quarter"] = quarter
         
-    try:
-        logger.info("Notifying Raven to process %s for year %d", ticker, year)
-        api_key = get_setting("RAVEN_API_KEY")
-        if not api_key:
-            raise RuntimeError("RAVEN_API_KEY environment variable is not set")
-        headers = {"X-API-Key": api_key}
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=payload, headers=headers)
-            await response.raise_for_status()
-            logger.info("Successfully notified Raven to process %s", ticker)
-    except httpx.HTTPError as e:
-        error_msg = f"Failed to notify Raven for {ticker}: {str(e)}"
-        logger.error(error_msg)
-        raise RuntimeError(error_msg) from e
-    except Exception as e:
-        error_msg = f"Unexpected error notifying Raven for {ticker}: {str(e)}"
-        logger.error(error_msg)
-        raise RuntimeError(error_msg) from e
+    logger.info("Prepared Raven payload for %s: %s", ticker, payload)
+    
+    # Get API key
+    api_key = get_setting("RAVEN_API_KEY")
+    if not api_key:
+        logger.error("RAVEN_API_KEY environment variable is not set")
+        raise RuntimeError("RAVEN_API_KEY environment variable is not set")
+    
+    headers = {"X-API-Key": api_key}
+    
+    # Retry configuration
+    max_retries = 3
+    retry_delay = 1.0  # seconds
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.info("Notifying Raven to process %s for year %d (attempt %d/%d)", 
+                       ticker, year, attempt, max_retries)
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, json=payload, headers=headers)
+                await response.raise_for_status()
+                
+                logger.info("Successfully notified Raven to process %s (attempt %d)", 
+                           ticker, attempt)
+                return  # Success, exit the retry loop
+                
+        except httpx.ConnectError as e:
+            error_msg = f"Connection error notifying Raven for {ticker} (attempt {attempt}/{max_retries}): {str(e)}"
+            logger.error(error_msg)
+            
+            if attempt < max_retries:
+                logger.info("Retrying in %.1f seconds...", retry_delay)
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+                continue
+            else:
+                logger.error("All connection attempts failed for %s", ticker)
+                raise RuntimeError(f"Failed to connect to Raven for {ticker} after {max_retries} attempts: {str(e)}") from e
+                
+        except httpx.HTTPError as e:
+            error_msg = f"HTTP error notifying Raven for {ticker} (attempt {attempt}/{max_retries}): {str(e)}"
+            logger.error(error_msg)
+            
+            if attempt < max_retries:
+                logger.info("Retrying in %.1f seconds...", retry_delay)
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+                continue
+            else:
+                logger.error("All HTTP attempts failed for %s", ticker)
+                raise RuntimeError(f"Failed to notify Raven for {ticker} after {max_retries} attempts: {str(e)}") from e
+                
+        except Exception as e:
+            error_msg = f"Unexpected error notifying Raven for {ticker} (attempt {attempt}/{max_retries}): {str(e)}"
+            logger.error(error_msg)
+            
+            if attempt < max_retries:
+                logger.info("Retrying in %.1f seconds...", retry_delay)
+                await asyncio.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+                continue
+            else:
+                logger.error("All attempts failed for %s", ticker)
+                raise RuntimeError(f"Unexpected error notifying Raven for {ticker} after {max_retries} attempts: {str(e)}") from e
+    
+    # This should never be reached, but just in case
+    logger.error("Unexpected end of retry loop for %s", ticker)
+    raise RuntimeError(f"Unexpected end of retry loop for {ticker}")
 
 
 async def _fetch_api_ninjas(ticker: str) -> list[dict]:

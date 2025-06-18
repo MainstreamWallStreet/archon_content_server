@@ -40,6 +40,8 @@ spec:
               value: "banshee-email-queue"
             - name: ENV
               value: "production"
+            - name: RAVEN_URL
+              value: "https://filing-fetcher-api-455624753981.us-central1.run.app"
             
             # ───── API Keys from Secret Manager ─────
             - name: API_NINJAS_KEY
