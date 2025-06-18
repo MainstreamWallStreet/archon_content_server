@@ -160,15 +160,15 @@ def test_create_ticker_success(client, mock_store, mock_cleanup, mock_raven):
     assert response.status_code == 200
     assert response.json() == {"message": "Successfully added AAPL to watchlist"}
     mock_store.add_ticker.assert_called_once_with("AAPL")
-    # Verify that _notify_raven was called for each year from 2020 to current year
+    # Verify that _notify_raven was called for the last 2 years
     current_year = datetime.now().year
-    expected_calls = [("AAPL", {"year": year}) for year in range(2020, current_year + 1)]
+    expected_calls = [("AAPL", {"year": year}) for year in range(current_year - 1, current_year + 1)]
     assert mock_raven.call_count == len(expected_calls)
     for call in mock_raven.call_args_list:
         args, kwargs = call
         assert args[0] == "AAPL"
         assert "year" in kwargs
-        assert 2020 <= kwargs["year"] <= current_year
+        assert current_year - 1 <= kwargs["year"] <= current_year
 
 def test_create_ticker_duplicate(client, mock_store):
     """Test creating a duplicate ticker returns 409."""
