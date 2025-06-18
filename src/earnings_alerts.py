@@ -190,6 +190,7 @@ async def refresh_upcoming_calls(
                 for offset, label in [
                     (timedelta(days=7), "one_week"),
                     (timedelta(days=1), "tomorrow"),
+                    (timedelta(hours=1), "one_hour"),
                 ]:
                     send_time = call_time - offset
                     logger.info("Calculating %s reminder for %s: send_time=%s (call_time=%s - %s)", 
@@ -337,6 +338,11 @@ def _render(kind: str, ticker: str, call_time: datetime) -> tuple[str, str]:
     if kind == "tomorrow":
         return (
             f"{ticker} earnings call tomorrow",
+            f"Reminder: {ticker} announces earnings on {dt_str}.",
+        )
+    if kind == "one_hour":
+        return (
+            f"{ticker} earnings call in 1 hour",
             f"Reminder: {ticker} announces earnings on {dt_str}.",
         )
     # If we get here, it's an unknown kind - shouldn't happen

@@ -42,7 +42,7 @@ async def test_refresh_upcoming_calls_creates_objects(buckets):
         fetcher=fetcher,
     )
     call_bucket.blob.assert_called_with("calls/AAPL/2025-07-30.json")
-    assert email_bucket.blob.call_count == 2  # one_week and tomorrow reminders
+    assert email_bucket.blob.call_count == 3  # one_week, tomorrow, and one_hour reminders
 
 
 def test_cleanup_email_queue_removes_unknown(buckets):
