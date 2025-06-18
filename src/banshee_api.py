@@ -130,10 +130,10 @@ async def create_ticker(ticker: dict, _: str = Depends(validate_key)):
         store.add_ticker(ticker_upper)
         logger.info("Successfully added ticker %s to store", ticker_upper)
         
-        # Notify Raven to process the ticker for all years from 2020 to current year in the background
-        logger.info("Notifying Raven to process ticker %s for years 2020 to current year (background)", ticker_upper)
+        # Notify Raven to process the ticker for the last 2 years in the background
+        logger.info("Notifying Raven to process ticker %s for the last 2 years (background)", ticker_upper)
         current_year = datetime.now().year
-        for year in range(2020, current_year + 1):
+        for year in range(current_year - 1, current_year + 1):
             asyncio.create_task(_notify_raven(ticker_upper, year=year))
         
         # Immediately refresh upcoming calls to ensure the new ticker has an earnings entry
