@@ -1,6 +1,8 @@
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
+import pytest
 
 from src.banshee_api import app
 
@@ -300,3 +302,45 @@ def test_cleanup_duplicates_endpoint():
         data = resp.json()
         assert data["message"] == "Duplicate cleanup completed successfully, removed 15 emails"
         mock_cleanup.assert_called_once()
+
+
+@pytest.fixture
+def isolated_mock_store(monkeypatch):
+    with patch("src.banshee_api.store") as mock:
+        mock.list_tickers.return_value = ["JPM"]
+        mock.add_ticker = MagicMock()
+        mock.remove_ticker = MagicMock()
+        yield mock
+
+def test_delete_ticker_removes_calls_and_emails(client, isolated_mock_store):
+    """Test that deleting a ticker removes all its calls and emails from the backend."""
+    # Simulate calls and emails for JPM and another ticker
+    jpm_calls = [
+        ("calls/JPM/2025-07-14.json", {"ticker": "JPM", "call_date": "2025-07-14"}),
+        ("calls/JPM/2025-10-14.json", {"ticker": "JPM", "call_date": "2025-10-14"}),
+    ]
+    bac_calls = [
+        ("calls/BAC/2025-07-14.json", {"ticker": "BAC", "call_date": "2025-07-14"}),
+    ]
+    emails = [
+        ("queue/JPM/email1.json", {"ticker": "JPM", "call_time": "2025-07-14T13:00:00+00:00", "kind": "one_week"}),
+        ("queue/BAC/email2.json", {"ticker": "BAC", "call_time": "2025-07-14T13:00:00+00:00", "kind": "one_week"}),
+    ]
+    with patch("src.banshee_api.calls_bucket") as calls_bucket, \
+         patch("src.banshee_api.email_bucket") as email_bucket, \
+         patch("src.banshee_api.cleanup_ticker_emails") as clean_ticker_emails:
+        # Only JPM calls should be returned for the JPM prefix
+        calls_bucket.list_json.side_effect = lambda prefix: jpm_calls if prefix == "calls/JPM/" else bac_calls if prefix == "calls/BAC/" else []
+        email_bucket.list_json.return_value = emails
+        calls_bucket.delete = MagicMock()
+        clean_ticker_emails.return_value = 1
+        # Delete JPM
+        response = client.delete("/watchlist/tickers/JPM", headers={"X-API-Key": API_KEY})
+        assert response.status_code == 200
+        # All JPM calls should be deleted
+        deleted_calls = [call[0][0] for call in calls_bucket.delete.call_args_list]
+        assert set(deleted_calls) == {"calls/JPM/2025-07-14.json", "calls/JPM/2025-10-14.json"}
+        # BAC call should remain (never deleted)
+        assert "calls/BAC/2025-07-14.json" not in deleted_calls
+        # All JPM emails should be deleted via cleanup_ticker_emails
+        clean_ticker_emails.assert_called_once_with(email_bucket, "JPM")
