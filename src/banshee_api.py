@@ -173,19 +173,14 @@ async def delete_ticker(ticker: str, _: str = Depends(validate_key)):
         store.remove_ticker(ticker)
         logger.info("Successfully removed ticker %s from store", ticker)
         
-        # Clean up related calls and emails for the removed ticker
-        logger.info("Cleaning up calls for removed ticker %s", ticker)
-        
-        # Remove all calls for this ticker
+        # Remove all calls for this ticker (regardless of watchlist)
         calls_removed = 0
         for path, data in calls_bucket.list_json(f"calls/{ticker}/"):
             calls_bucket.delete(path)
             calls_removed += 1
             logger.info("Removed call for %s: %s", ticker, path)
-        
         # Remove all emails for this ticker
         emails_removed = cleanup_ticker_emails(email_bucket, ticker)
-        
         logger.info("Successfully cleaned up %d calls and %d emails for ticker %s", 
                    calls_removed, emails_removed, ticker)
         

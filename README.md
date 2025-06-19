@@ -13,6 +13,8 @@ Banshee is a FastAPI-based backend for managing stock watchlists, earnings alert
 - **Automated Data Sync**: Scheduled tasks for syncing earnings data and sending queued emails.
 - **Self-Contained Background Scheduler**: All periodic jobs run inside the server—no external cron or cloud scheduler needed.
 - **Comprehensive Test Suite**: Includes robust async and endpoint tests.
+- **Reliable Cleanup on Ticker Deletion**: Deleting a ticker now reliably removes all related earnings calls and queued emails for that ticker, with robust regression tests to ensure correctness.
+- **Deduplication and Manual Cleanup**: Includes scripts and endpoints to deduplicate and manually clean up the email/call queues for maintenance.
 
 ## Background Scheduler: How Banshee Automates Everything
 
@@ -109,7 +111,7 @@ This will start the FastAPI server on `http://0.0.0.0:8080` with hot reload and 
   **Body:** `{ "ticker": "AAPL", "user": "alice" }`
 
 - `DELETE /watchlist/{ticker}`  
-  Remove a ticker from the watchlist and clean up related data.
+  Remove a ticker from the watchlist and clean up related data. **This now reliably deletes all earnings calls and queued emails for the ticker.**
 
 - `GET /earnings/upcoming`  
   List upcoming earnings calls.
@@ -163,6 +165,11 @@ This will start the FastAPI server on `http://0.0.0.0:8080` with hot reload and 
 ## Contributing
 
 Pull requests and issues are welcome! Please ensure all tests pass before submitting changes.
+
+## Maintenance & Cleanup
+
+- The system includes endpoints and scripts for deduplicating the email queue and cleaning up all calls/emails for a ticker.
+- These tools can be used for manual maintenance or in response to operational needs.
 
 ---
 
