@@ -138,9 +138,8 @@ def mock_store():
 @pytest.fixture
 def mock_cleanup():
     """Mock the cleanup functions for testing."""
-    with patch("src.banshee_api.cleanup_calls_queue") as mock_calls, \
-         patch("src.banshee_api.cleanup_email_queue") as mock_email:
-        yield mock_calls, mock_email
+    with patch("src.banshee_api.cleanup_ticker_emails") as mock_cleanup_ticker_emails:
+        yield mock_cleanup_ticker_emails
 
 @pytest.fixture
 def mock_raven():
@@ -196,6 +195,8 @@ def test_create_ticker_raven_failure(client, mock_store, mock_cleanup, mock_rave
 def test_delete_ticker_success(client, mock_store, mock_cleanup):
     """Test successful deletion of a ticker."""
     mock_store.list_tickers.return_value = ["AAPL"]
+    mock_cleanup.return_value = 5  # Mock that 5 emails were removed
+    
     start_time = time.time()
     response = client.delete(
         "/watchlist/tickers/AAPL",
@@ -206,8 +207,7 @@ def test_delete_ticker_success(client, mock_store, mock_cleanup):
     # Match the actual message from the API
     assert response.json() == {"message": "Successfully deleted AAPL from watchlist"}
     mock_store.remove_ticker.assert_called_once_with("AAPL")
-    mock_cleanup[0].assert_called_once()
-    mock_cleanup[1].assert_called_once()
+    mock_cleanup.assert_called_once()
     assert end_time - start_time < 1.0
 
 def test_delete_ticker_not_found(client, mock_store):
