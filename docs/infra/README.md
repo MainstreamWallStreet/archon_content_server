@@ -6,29 +6,51 @@ This document describes the Terraform infrastructure for the Zergling FastAPI se
 
 The Terraform configuration in the `infra/` directory sets up a complete Google Cloud Platform (GCP) infrastructure for running the Zergling FastAPI server in production. It includes:
 
-- **Cloud Run Service**: The main application hosting (deployed via Cloud Deploy)
+- **Cloud Run Service**: The main application hosting (deployed via direct Cloud Run deployment)
 - **Artifact Registry**: Docker image storage
 - **Cloud Storage Buckets**: Data storage for the application
 - **Secret Manager**: Secure storage for API keys and credentials
-- **Cloud Deploy**: CI/CD pipeline infrastructure
+- **Cloud Build**: CI/CD pipeline infrastructure
 - **IAM Service Accounts**: Security and permissions management
 - **Workload Identity**: GitHub Actions integration
 - **Remote State Storage**: GCS backend for Terraform state
 
+## Why Direct Cloud Run Deployment Instead of Cloud Deploy?
+
+### Cloud Deploy Limitations
+
+We originally attempted to use Cloud Deploy for automated deployments, but encountered several significant limitations:
+
+1. **Skaffold Version Incompatibility**: Cloud Deploy uses Skaffold v2.16, which doesn't support Cloud Run natively. The `cloudrun` deployer was available in Skaffold v3 but was removed in v2.16.
+
+2. **Kubernetes-Focused Design**: Cloud Deploy is primarily designed for Kubernetes deployments, not Cloud Run. The kubectl deployer cannot deploy to Cloud Run services.
+
+3. **Complexity Overhead**: Cloud Deploy adds an unnecessary abstraction layer for Cloud Run deployments, introducing additional failure points and debugging complexity.
+
+4. **Version Downgrades**: Google has downgraded Cloud Deploy's Skaffold version over time, breaking previously working Cloud Run deployments.
+
+### Direct Cloud Run Deployment Advantages
+
+1. **Simplicity**: Direct deployment without intermediate layers
+2. **Reliability**: Fewer failure points and easier debugging
+3. **Speed**: Faster deployment cycles
+4. **Compatibility**: No version compatibility issues
+5. **Maintenance**: Easier to troubleshoot and maintain
+
 ## Infrastructure Components
 
-### 1. Cloud Run Service (Deployed via Cloud Deploy)
+### 1. Cloud Run Service (Direct Deployment)
 
 **Purpose**: Hosts the FastAPI application in a serverless environment.
 
 **What it does**:
-- Deployed via Cloud Deploy pipeline (not directly in Terraform)
+- Deployed directly via Cloud Build and gcloud commands
 - Uses service account with necessary permissions
 - Configured with environment variables from Secret Manager
 - Publicly accessible (can be restricted if needed)
 
 **Customization needed**:
-- Service name is configured in `clouddeploy/service.yaml`
+- Service name is configured in Cloud Build configuration
 - Environment variables are set via Secret Manager
 - Service account permissions are managed in Terraform
 
@@ -86,24 +108,20 @@ The Terraform configuration in the `infra/` directory sets up a complete Google 
 - `secret_ids`: Change to match your naming convention
 - `secret_data`: Replace placeholder values with real credentials
 
-### 5. Cloud Deploy Pipeline
+### 5. Cloud Build Integration
 
 **Purpose**: Enables automated CI/CD from GitHub to Cloud Run.
 
-**Components**:
-- `google_clouddeploy_delivery_pipeline.zergling`: Main pipeline named "zergling-pipeline"
-- `google_clouddeploy_target.dev`: Development target named "dev"
-
 **What it does**:
-- Creates a delivery pipeline for automated deployments
-- Configures Cloud Run as the deployment target
-- Sets up service account permissions for deployment
-- Uses the deploy service account for execution
+- Cloud Build builds Docker images and deploys directly to Cloud Run
+- Uses GitHub Actions for workflow orchestration
+- Integrates with Workload Identity for secure authentication
+- Provides health verification and deployment monitoring
 
 **Customization needed**:
-- `pipeline_name`: Change from "zergling-pipeline" to your pipeline name
-- `target_name`: Change from "dev" to your environment names
-- Add additional targets for staging/production environments
+- Build configuration is in `cloudbuild.yaml`
+- GitHub Actions workflows are in `.github/workflows/`
+- Adjust build steps and deployment parameters as needed
 
 ### 6. IAM Service Accounts
 
@@ -111,7 +129,7 @@ The Terraform configuration in the `infra/` directory sets up a complete Google 
 
 **Service accounts referenced** (must exist before Terraform):
 - `cloud-run-zergling-sa`: Runs the Cloud Run service
-- `deploy-zergling-sa`: Handles Cloud Deploy operations
+- `deploy-zergling-sa`: Handles Cloud Build operations
 
 **What they do**:
 - Configure specific permissions for each service
@@ -264,7 +282,7 @@ gcloud secrets versions add zergling-google-sa-value --data-file=path/to/service
 docker build -t gcr.io/your-project-id/your-service-name .
 docker push gcr.io/your-project-id/your-service-name
 
-# Deploy via Cloud Deploy (recommended)
+# Deploy via Cloud Build (recommended)
 ./scripts/test_deployment.sh
 
 # Or deploy directly to Cloud Run
@@ -353,11 +371,14 @@ gcloud logging read "resource.type=cloud_run_revision AND resource.labels.servic
 gcloud builds list --limit=10
 ```
 
-### 3. Cloud Deploy Logs
+### 3. Deployment Monitoring
 
 ```bash
-# View deployment logs
-gcloud deploy releases list --delivery-pipeline=zergling-pipeline --region=us-central1
+# View deployment status
+gcloud run services describe zergling-api --region=us-central1
+
+# Check build history
+gcloud builds list --limit=10 --format="table(id,status,createTime,logUrl)"
 ```
 
 ### 4. Terraform State
@@ -378,7 +399,7 @@ terraform state list
 2. **Permission Denied**: Check service account permissions
 3. **Secret Not Found**: Ensure secrets are created and accessible
 4. **Build Failures**: Check Dockerfile and build configuration
-5. **Deployment Failures**: Verify Cloud Deploy configuration
+5. **Deployment Failures**: Verify Cloud Build configuration and service account permissions
 
 ### Debug Log
 

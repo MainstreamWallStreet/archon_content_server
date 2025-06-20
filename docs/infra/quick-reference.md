@@ -1,11 +1,28 @@
 # Infrastructure Quick Reference
 
-This document provides quick commands and references for common infrastructure operations.
+## Overview
 
-## Terraform Commands
+This is a quick reference guide for managing the Zergling FastAPI server infrastructure on Google Cloud Platform.
 
-### Basic Operations
+## Prerequisites
 
+- Google Cloud CLI installed and authenticated
+- Terraform installed
+- Access to the GCP project
+- Service accounts created (see setup instructions)
+
+## Quick Commands
+
+### Project and Region
+```bash
+# Set project
+gcloud config set project mainstreamwallstreet
+
+# Set region
+gcloud config set run/region us-central1
+```
+
+### Terraform Operations
 ```bash
 # Initialize Terraform
 cd infra
@@ -17,70 +34,31 @@ terraform plan
 # Apply changes
 terraform apply
 
-# Apply with auto-approve
-terraform apply -auto-approve
-
-# Destroy infrastructure (BE CAREFUL!)
+# Destroy infrastructure (use with caution)
 terraform destroy
-
-# Show current state
-terraform show
-
-# List all resources
-terraform state list
-
-# Import existing resources
-terraform import google_cloud_run_service.zergling projects/PROJECT_ID/locations/REGION/services/SERVICE_NAME
 ```
 
-### State Management
-
-```bash
-# Refresh state
-terraform refresh
-
-# Validate configuration
-terraform validate
-
-# Format configuration files
-terraform fmt
-
-# Show outputs
-terraform output
-
-# Show specific output
-terraform output workload_identity_provider
-terraform output cloud_run_service_account
-```
-
-## Google Cloud Commands
-
-### Cloud Run
-
+### Cloud Run Service
 ```bash
 # List services
 gcloud run services list --region=us-central1
 
-# Describe service
+# Get service details
 gcloud run services describe zergling-api --region=us-central1
 
-# Update service
-gcloud run services update zergling-api --region=us-central1 --image=NEW_IMAGE
+# Get service URL
+gcloud run services describe zergling-api --region=us-central1 --format="value(status.url)"
 
 # View logs
-gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=zergling-api"
-
-# Delete service
-gcloud run services delete zergling-api --region=us-central1
+gcloud logs read "resource.type=cloud_run_revision AND resource.labels.service_name=zergling-api" --limit=50
 ```
 
 ### Cloud Build
-
 ```bash
 # List builds
 gcloud builds list --limit=10
 
-# View build details
+# Get build details
 gcloud builds describe BUILD_ID
 
 # View build logs
@@ -90,340 +68,255 @@ gcloud builds log BUILD_ID
 gcloud builds submit --config=cloudbuild.yaml .
 ```
 
-### Cloud Deploy
-
+### Artifact Registry
 ```bash
-# List pipelines
-gcloud deploy delivery-pipelines list --region=us-central1
+# List repositories
+gcloud artifacts repositories list --location=us-central1
 
-# List targets
-gcloud deploy targets list --region=us-central1
+# List images
+gcloud artifacts docker images list us-central1-docker.pkg.dev/mainstreamwallstreet/zergling
 
-# List releases
-gcloud deploy releases list --delivery-pipeline=zergling-pipeline --region=us-central1
-
-# List rollouts
-gcloud deploy rollouts list --delivery-pipeline=zergling-pipeline --region=us-central1
-
-# Create release manually
-gcloud deploy releases create RELEASE_NAME --delivery-pipeline=zergling-pipeline --region=us-central1 --skaffold-file=clouddeploy.yaml
+# Delete old images
+gcloud artifacts docker images delete us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:latest
 ```
 
-### Secret Manager
-
-```bash
-# List secrets
-gcloud secrets list
-
-# Create secret
-gcloud secrets create SECRET_NAME --replication-policy="automatic"
-
-# Add secret version
-gcloud secrets versions add SECRET_NAME --data-file=<(echo -n "SECRET_VALUE")
-
-# Get secret value
-gcloud secrets versions access latest --secret=SECRET_NAME
-
-# Delete secret
-gcloud secrets delete SECRET_NAME
-
-# Update specific secrets
-gcloud secrets versions add zergling-api-key --data-file=<(echo -n "your-actual-api-key")
-gcloud secrets versions add zergling-google-sa-value --data-file=path/to/service-account.json
-gcloud secrets versions add alert-from-email --data-file=<(echo -n "your-email@domain.com")
-gcloud secrets versions add alert-recipients --data-file=<(echo -n "recipient1@domain.com,recipient2@domain.com")
-```
-
-### Storage
-
+### Cloud Storage
 ```bash
 # List buckets
 gsutil ls
 
-# List objects in bucket
-gsutil ls gs://BUCKET_NAME
+# List bucket contents
+gsutil ls gs://zergling-data/
 
-# Copy file to bucket
-gsutil cp FILE gs://BUCKET_NAME/
+# Copy files
+gsutil cp local-file gs://zergling-data/
 
-# Copy file from bucket
-gsutil cp gs://BUCKET_NAME/FILE ./
-
-# Delete bucket (must be empty)
-gsutil rm -r gs://BUCKET_NAME
-
-# Check bucket permissions
-gsutil iam get gs://zergling-data
-gsutil iam get gs://zergling-earnings
-gsutil iam get gs://zergling-email-queue
+# Download files
+gsutil cp gs://zergling-data/file local-file
 ```
 
-### IAM
+### Secret Manager
+```bash
+# List secrets
+gcloud secrets list
 
+# Get secret value
+gcloud secrets versions access latest --secret=zergling-api-key
+
+# Update secret
+echo "new-value" | gcloud secrets versions add zergling-api-key --data-file=-
+
+# Create new secret
+gcloud secrets create secret-name --replication-policy=automatic
+```
+
+### Service Accounts
 ```bash
 # List service accounts
 gcloud iam service-accounts list
 
-# Create service account (PREREQUISITE)
-gcloud iam service-accounts create cloud-run-zergling-sa --display-name="Cloud Run Zergling Service Account"
-gcloud iam service-accounts create deploy-zergling-sa --display-name="Deploy Zergling Service Account"
+# Get service account details
+gcloud iam service-accounts describe cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com
 
-# Grant role to service account
-gcloud projects add-iam-policy-binding PROJECT_ID --member="serviceAccount:SERVICE_ACCOUNT@PROJECT_ID.iam.gserviceaccount.com" --role="ROLE_NAME"
+# Create service account key (if needed)
+gcloud iam service-accounts keys create key.json --iam-account=cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com
+```
 
-# List IAM policy
-gcloud projects get-iam-policy PROJECT_ID
+### Workload Identity
+```bash
+# List workload identity pools
+gcloud iam workload-identity-pools list --location=global
 
-# Check specific service account permissions
+# List providers
+gcloud iam workload-identity-pools providers list --workload-identity-pool=zergling-github-pool-v3 --location=global
+
+# Get provider details
+gcloud iam workload-identity-pools providers describe zergling-github-provider --workload-identity-pool=zergling-github-pool-v3 --location=global
+```
+
+## Deployment Commands
+
+### Manual Deployment
+```bash
+# Deploy directly to Cloud Run
+gcloud run deploy zergling-api \
+  --image=us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:latest \
+  --region=us-central1 \
+  --platform=managed \
+  --allow-unauthenticated \
+  --memory=4Gi \
+  --cpu=2 \
+  --concurrency=2 \
+  --timeout=300 \
+  --service-account=cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com \
+  --set-env-vars=EXAMPLE_BUCKET=zergling-data,DEBUG=false,LOG_LEVEL=INFO \
+  --set-secrets=ZERGLING_API_KEY=zergling-api-key:latest \
+  --set-secrets=GOOGLE_APPLICATION_CREDENTIALS_JSON=zergling-google-sa-value:latest
+```
+
+### Test Deployment Script
+```bash
+# Run the test deployment script
+./scripts/test_deployment.sh
+```
+
+## Monitoring and Debugging
+
+### Health Checks
+```bash
+# Test health endpoint
+curl -f https://zergling-api-gl7hc5q6rq-uc.a.run.app/health
+
+# Test with API key
+curl -H "X-API-Key: your-api-key" https://zergling-api-gl7hc5q6rq-uc.a.run.app/health
+```
+
+### Logs
+```bash
+# View recent logs
+gcloud logs read "resource.type=cloud_run_revision" --limit=50
+
+# View logs for specific service
+gcloud logs read "resource.type=cloud_run_revision AND resource.labels.service_name=zergling-api" --limit=50
+
+# View build logs
+gcloud logs read "resource.type=cloud_build" --limit=50
+```
+
+### Metrics
+```bash
+# View Cloud Run metrics
+gcloud monitoring metrics list --filter="metric.type:run.googleapis.com"
+
+# View build metrics
+gcloud monitoring metrics list --filter="metric.type:cloudbuild.googleapis.com"
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### 1. Service Account Permissions
+```bash
+# Check service account permissions
 gcloud projects get-iam-policy mainstreamwallstreet --flatten="bindings[].members" --format="table(bindings.role)" --filter="bindings.members:cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com"
 ```
 
-## Environment Variables
-
-### Required Environment Variables
-
+#### 2. Build Failures
 ```bash
-# For local development
-export ZERGLING_API_KEY="your-api-key"
-export EXAMPLE_BUCKET="your-bucket-name"
-export GOOGLE_APPLICATION_CREDENTIALS="path/to/service-account.json"
+# Check build status
+gcloud builds list --limit=5
 
-# For Cloud Run (set via Secret Manager)
-ZERGLING_API_KEY=projects/mainstreamwallstreet/secrets/zergling-api-key/versions/latest
-GOOGLE_SA_VALUE=projects/mainstreamwallstreet/secrets/zergling-google-sa-value/versions/latest
+# View build logs
+gcloud builds log BUILD_ID
+
+# Check build configuration
+cat cloudbuild.yaml
 ```
 
-## Common Customizations
-
-### Change Project ID
-
+#### 3. Deployment Failures
 ```bash
-# Update terraform.tfvars
-project = "your-new-project-id"
-
-# Update backend.tf (if using remote state)
-terraform {
-  backend "gcs" {
-    bucket = "your-new-project-tf-state"
-    prefix = "terraform/state"
-  }
-}
-```
-
-### Change Region
-
-```bash
-# Update terraform.tfvars
-region = "us-west1"  # or your preferred region
-```
-
-### Change Service Names
-
-```bash
-# Update main.tf - replace all instances of:
-# "zergling-api" -> "your-service-name"
-# "zergling" -> "your-app-name"
-# "zergling-data" -> "your-app-data"
-# "zergling-earnings" -> "your-app-earnings"
-# "zergling-email-queue" -> "your-app-email-queue"
-```
-
-### Change GitHub Repository
-
-```bash
-# Update terraform.tfvars
-github_owner = "YourGitHubUsername"
-github_repo = "your-repository-name"
-
-# Update main.tf attribute_condition
-attribute_condition = "attribute.repository == \"YourGitHubUsername/YourRepositoryName\""
-```
-
-## Troubleshooting Commands
-
-### Check Prerequisites
-
-```bash
-# Check if required service accounts exist
-gcloud iam service-accounts list | grep -E "(cloud-run-zergling-sa|deploy-zergling-sa)"
-
-# Check if current user has required permissions
-gcloud auth list
-gcloud config get-value project
-
-# Test service account permissions
-gcloud auth activate-service-account --key-file=service-account.json
-```
-
-### Check Resource Status
-
-```bash
-# Check Cloud Run service
+# Check Cloud Run service status
 gcloud run services describe zergling-api --region=us-central1
 
-# Check Cloud Build status
-gcloud builds list --limit=1
+# Check service logs
+gcloud logs read "resource.type=cloud_run_revision AND resource.labels.service_name=zergling-api" --limit=20
 
-# Check Cloud Deploy status
-gcloud deploy releases list --delivery-pipeline=zergling-pipeline --region=us-central1
-
-# Check IAM permissions
-gcloud projects get-iam-policy mainstreamwallstreet --flatten="bindings[].members" --format="table(bindings.role)" --filter="bindings.members:cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com"
-
-# Check Artifact Registry
-gcloud artifacts repositories list --location=us-central1
+# Verify secrets exist
+gcloud secrets list --filter="name:zergling"
 ```
 
-### Debug Issues
-
+#### 4. Health Check Failures
 ```bash
-# Enable debug logging
-export TF_LOG=DEBUG
-terraform plan
+# Test health endpoint
+curl -v https://zergling-api-gl7hc5q6rq-uc.a.run.app/health
 
-# Check Terraform state
-terraform state show google_cloud_run_service.zergling
-
-# Validate Terraform files
-terraform validate
-
-# Check for syntax errors
-terraform fmt -check
-
-# Check backend configuration
-terraform init -reconfigure
+# Check service configuration
+gcloud run services describe zergling-api --region=us-central1 --format="yaml(spec.template.spec.containers[0].env)"
 ```
 
-### Check Secrets
-
+#### 5. Authentication Issues
 ```bash
-# List all secrets
-gcloud secrets list
+# Check Workload Identity configuration
+gcloud iam workload-identity-pools providers describe zergling-github-provider --workload-identity-pool=zergling-github-pool-v3 --location=global
 
-# Check specific secret values
-gcloud secrets versions access latest --secret=zergling-api-key
-gcloud secrets versions access latest --secret=zergling-google-sa-value
-gcloud secrets versions access latest --secret=alert-from-email
-gcloud secrets versions access latest --secret=alert-recipients
+# Verify GitHub Actions secrets
+# Check GitHub repository settings for required secrets
 ```
 
-## Cost Monitoring
+### Emergency Procedures
 
+#### Rollback Deployment
+```bash
+# Deploy previous image
+gcloud run deploy zergling-api \
+  --image=us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:PREVIOUS_TAG \
+  --region=us-central1
+```
+
+#### Restart Service
+```bash
+# Update service to trigger restart
+gcloud run services update zergling-api --region=us-central1 --no-cpu-throttling
+```
+
+#### Check Resource Usage
+```bash
+# Check Cloud Run resource usage
+gcloud monitoring metrics list --filter="metric.type:run.googleapis.com/request_count"
+
+# Check storage usage
+gsutil du -sh gs://zergling-data/
+```
+
+## Security
+
+### IAM Best Practices
+- Use least-privilege access
+- Regularly rotate service account keys
+- Monitor IAM changes
+- Use Workload Identity for CI/CD
+
+### Secret Management
+- Store all secrets in Secret Manager
+- Use secret versions for rotation
+- Limit access to secrets
+- Monitor secret access
+
+### Network Security
+- Use VPC connectors if needed
+- Configure firewall rules
+- Monitor network traffic
+- Use private services when possible
+
+## Cost Optimization
+
+### Monitoring Costs
 ```bash
 # Check Cloud Run costs
 gcloud billing budgets list
 
-# Check storage costs
-gsutil du -sh gs://zergling-data
-gsutil du -sh gs://zergling-earnings
-gsutil du -sh gs://zergling-email-queue
-
-# Check build costs
-gcloud builds list --limit=100 --format="table(id,status,createTime,logUrl)"
-
-# Check Artifact Registry usage
-gcloud artifacts docker images list us-central1-docker.pkg.dev/mainstreamwallstreet/zergling
+# Monitor resource usage
+gcloud monitoring metrics list --filter="metric.type:run.googleapis.com/request_count"
 ```
 
-## Security Checklist
+### Optimization Tips
+- Use appropriate memory/CPU settings
+- Clean up old Docker images
+- Monitor and adjust concurrency
+- Use Cloud Run's auto-scaling features
 
-- [ ] Service accounts `cloud-run-zergling-sa` and `deploy-zergling-sa` exist
-- [ ] All secrets are stored in Secret Manager
-- [ ] Service accounts have minimal required permissions
-- [ ] Workload Identity is configured for GitHub Actions
-- [ ] Cloud Run service has proper authentication
-- [ ] Storage buckets have appropriate IAM policies
-- [ ] API keys are rotated regularly
-- [ ] Logging is enabled for all services
-- [ ] Terraform state is stored securely in GCS
+## Maintenance
 
-## Emergency Procedures
+### Regular Tasks
+- Update dependencies
+- Rotate secrets
+- Clean up old resources
+- Monitor logs and metrics
+- Review IAM permissions
 
-### Rollback Deployment
-
-```bash
-# Rollback to previous revision
-gcloud run services update-traffic zergling-api --to-revisions=REVISION_NAME=100 --region=us-central1
-
-# Or rollback to specific image
-gcloud run services update zergling-api --image=PREVIOUS_IMAGE --region=us-central1
-```
-
-### Stop All Services
-
-```bash
-# Scale down Cloud Run service
-gcloud run services update zergling-api --max-instances=0 --region=us-central1
-
-# Or delete service entirely
-gcloud run services delete zergling-api --region=us-central1
-```
-
-### Backup Data
-
-```bash
-# Backup storage buckets
-gsutil -m cp -r gs://zergling-data gs://BACKUP_BUCKET/zergling-data
-gsutil -m cp -r gs://zergling-earnings gs://BACKUP_BUCKET/zergling-earnings
-gsutil -m cp -r gs://zergling-email-queue gs://BACKUP_BUCKET/zergling-email-queue
-
-# Export Terraform state
-terraform state pull > terraform-state-backup.json
-
-# Backup secrets
-gcloud secrets versions access latest --secret=zergling-api-key > zergling-api-key-backup.txt
-gcloud secrets versions access latest --secret=zergling-google-sa-value > zergling-google-sa-backup.json
-```
-
-### Restore from Backup
-
-```bash
-# Restore Terraform state
-terraform state push terraform-state-backup.json
-
-# Restore secrets
-gcloud secrets versions add zergling-api-key --data-file=zergling-api-key-backup.txt
-gcloud secrets versions add zergling-google-sa-value --data-file=zergling-google-sa-backup.json
-
-# Restore storage buckets
-gsutil -m cp -r gs://BACKUP_BUCKET/zergling-data gs://zergling-data
-gsutil -m cp -r gs://BACKUP_BUCKET/zergling-earnings gs://zergling-earnings
-gsutil -m cp -r gs://BACKUP_BUCKET/zergling-email-queue gs://zergling-email-queue
-```
-
-## Common Issues and Solutions
-
-### Service Account Not Found
-
-```bash
-# Error: Service account not found
-# Solution: Create required service accounts first
-gcloud iam service-accounts create cloud-run-zergling-sa --display-name="Cloud Run Zergling Service Account"
-gcloud iam service-accounts create deploy-zergling-sa --display-name="Deploy Zergling Service Account"
-```
-
-### Permission Denied
-
-```bash
-# Error: Permission denied on resource
-# Solution: Check and grant required permissions
-gcloud projects add-iam-policy-binding mainstreamwallstreet --member="serviceAccount:cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com" --role="roles/secretmanager.secretAccessor"
-```
-
-### Secret Not Found
-
-```bash
-# Error: Secret not found
-# Solution: Create and populate secrets
-gcloud secrets create zergling-api-key --replication-policy="automatic"
-gcloud secrets versions add zergling-api-key --data-file=<(echo -n "your-actual-api-key")
-```
-
-### Cloud Deploy Pipeline Fails
-
-```bash
-# Error: Release render operation ended in failure
-# Solution: Check Cloud Deploy configuration and service account permissions
-gcloud deploy targets describe dev --region=us-central1
-gcloud projects get-iam-policy mainstreamwallstreet --flatten="bindings[].members" --format="table(bindings.role)" --filter="bindings.members:deploy-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com"
-``` 
+### Backup and Recovery
+- Backup Terraform state
+- Document configuration
+- Test recovery procedures
+- Monitor backup health 
