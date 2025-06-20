@@ -16,7 +16,7 @@ spec:
         # keep full CPU even while idle (optional, costs more)
         run.googleapis.com/cpu-throttling: "false"
         # ───────── service account ─────────
-        run.googleapis.com/service-account: "cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com"
+        run.googleapis.com/service-account: "cloud-run-zergling-sa@${PROJECT_ID}.iam.gserviceaccount.com"
         run.googleapis.com/execution-environment: gen2
     spec:
       # ───────── environment variables ─────────
@@ -57,4 +57,4 @@ spec:
         - name: google-sa
           secret:
             secretName: zergling-google-sa-value
-      serviceAccountName: cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com
+      serviceAccountName: cloud-run-zergling-sa@${PROJECT_ID}.iam.gserviceaccount.com
