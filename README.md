@@ -10,7 +10,7 @@ A production-ready FastAPI server template with GCP integration, API key auth, G
 - **Data Storage**: Generic GCS-based data store with JSON persistence
 - **Background Tasks**: Built-in scheduler for periodic operations
 - **Comprehensive Testing**: Full test suite with async support and mocking
-- **CI/CD Pipeline**: Automated build and deployment with Cloud Build and Cloud Deploy
+- **CI/CD Pipeline**: Automated build and deployment with Cloud Build and direct Cloud Run deployment
 - **Infrastructure as Code**: Terraform configuration for all GCP resources
 - **Development Environment**: Hot reload, Docker support, and development tools
 - **Production Ready**: Logging, error handling, health checks, and monitoring
@@ -70,7 +70,6 @@ A production-ready FastAPI server template with GCP integration, API key auth, G
 2. **Enable required APIs:**
    - Cloud Run API
    - Cloud Build API
-   - Cloud Deploy API
    - Secret Manager API
    - Storage API
    - Artifact Registry API
@@ -149,18 +148,21 @@ terraform apply
 
 ### CI/CD Pipeline
 The template includes:
+- **GitHub Actions**: Automated testing and deployment
 - **Cloud Build**: Automated Docker image building
-- **Cloud Deploy**: Progressive deployment pipeline
+- **Cloud Run**: Direct deployment with health verification
 - **Artifact Registry**: Container image storage
-- **Cloud Run**: Serverless container hosting
 
 ### Manual Deployment
 ```sh
-# Build and push image
-gcloud builds submit --tag gcr.io/PROJECT_ID/APP_NAME
+# Test deployment script
+./scripts/test_deployment.sh
 
-# Deploy to Cloud Run
-gcloud run deploy APP_NAME --image gcr.io/PROJECT_ID/APP_NAME
+# Direct Cloud Run deployment
+gcloud run deploy zergling-api \
+  --image=us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:latest \
+  --region=us-central1 \
+  --platform=managed
 ```
 
 ## Architecture
