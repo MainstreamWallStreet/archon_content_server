@@ -49,7 +49,8 @@ terraform fmt
 terraform output
 
 # Show specific output
-terraform output service_url
+terraform output workload_identity_provider
+terraform output cloud_run_service_account
 ```
 
 ## Google Cloud Commands
@@ -125,6 +126,12 @@ gcloud secrets versions access latest --secret=SECRET_NAME
 
 # Delete secret
 gcloud secrets delete SECRET_NAME
+
+# Update specific secrets
+gcloud secrets versions add zergling-api-key --data-file=<(echo -n "your-actual-api-key")
+gcloud secrets versions add zergling-google-sa-value --data-file=path/to/service-account.json
+gcloud secrets versions add alert-from-email --data-file=<(echo -n "your-email@domain.com")
+gcloud secrets versions add alert-recipients --data-file=<(echo -n "recipient1@domain.com,recipient2@domain.com")
 ```
 
 ### Storage
@@ -144,6 +151,11 @@ gsutil cp gs://BUCKET_NAME/FILE ./
 
 # Delete bucket (must be empty)
 gsutil rm -r gs://BUCKET_NAME
+
+# Check bucket permissions
+gsutil iam get gs://zergling-data
+gsutil iam get gs://zergling-earnings
+gsutil iam get gs://zergling-email-queue
 ```
 
 ### IAM
@@ -152,14 +164,18 @@ gsutil rm -r gs://BUCKET_NAME
 # List service accounts
 gcloud iam service-accounts list
 
-# Create service account
-gcloud iam service-accounts create SERVICE_ACCOUNT_NAME --display-name="Display Name"
+# Create service account (PREREQUISITE)
+gcloud iam service-accounts create cloud-run-zergling-sa --display-name="Cloud Run Zergling Service Account"
+gcloud iam service-accounts create deploy-zergling-sa --display-name="Deploy Zergling Service Account"
 
 # Grant role to service account
 gcloud projects add-iam-policy-binding PROJECT_ID --member="serviceAccount:SERVICE_ACCOUNT@PROJECT_ID.iam.gserviceaccount.com" --role="ROLE_NAME"
 
 # List IAM policy
 gcloud projects get-iam-policy PROJECT_ID
+
+# Check specific service account permissions
+gcloud projects get-iam-policy mainstreamwallstreet --flatten="bindings[].members" --format="table(bindings.role)" --filter="bindings.members:cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com"
 ```
 
 ## Environment Variables
@@ -173,8 +189,8 @@ export EXAMPLE_BUCKET="your-bucket-name"
 export GOOGLE_APPLICATION_CREDENTIALS="path/to/service-account.json"
 
 # For Cloud Run (set via Secret Manager)
-ZERGLING_API_KEY=projects/PROJECT_ID/secrets/zergling-api-key/versions/latest
-GOOGLE_SA_VALUE=projects/PROJECT_ID/secrets/zergling-google-sa-value/versions/latest
+ZERGLING_API_KEY=projects/mainstreamwallstreet/secrets/zergling-api-key/versions/latest
+GOOGLE_SA_VALUE=projects/mainstreamwallstreet/secrets/zergling-google-sa-value/versions/latest
 ```
 
 ## Common Customizations
@@ -182,10 +198,8 @@ GOOGLE_SA_VALUE=projects/PROJECT_ID/secrets/zergling-google-sa-value/versions/la
 ### Change Project ID
 
 ```bash
-# Update variables.tf
-variable "project_id" {
-  default = "your-new-project-id"
-}
+# Update terraform.tfvars
+project = "your-new-project-id"
 
 # Update backend.tf (if using remote state)
 terraform {
@@ -199,18 +213,8 @@ terraform {
 ### Change Region
 
 ```bash
-# Update variables.tf
-variable "region" {
-  default = "us-west1"  # or your preferred region
-}
-
-# Update backend.tf
-terraform {
-  backend "gcs" {
-    bucket = "your-project-tf-state"
-    prefix = "terraform/state"
-  }
-}
+# Update terraform.tfvars
+region = "us-west1"  # or your preferred region
 ```
 
 ### Change Service Names
@@ -220,13 +224,29 @@ terraform {
 # "zergling-api" -> "your-service-name"
 # "zergling" -> "your-app-name"
 # "zergling-data" -> "your-app-data"
+# "zergling-earnings" -> "your-app-earnings"
+# "zergling-email-queue" -> "your-app-email-queue"
+```
+
+### Change GitHub Repository
+
+```bash
+# Update terraform.tfvars
+github_owner = "YourGitHubUsername"
+github_repo = "your-repository-name"
+
+# Update main.tf attribute_condition
+attribute_condition = "attribute.repository == \"YourGitHubUsername/YourRepositoryName\""
 ```
 
 ## Troubleshooting Commands
 
-### Check Permissions
+### Check Prerequisites
 
 ```bash
+# Check if required service accounts exist
+gcloud iam service-accounts list | grep -E "(cloud-run-zergling-sa|deploy-zergling-sa)"
+
 # Check if current user has required permissions
 gcloud auth list
 gcloud config get-value project
@@ -248,7 +268,10 @@ gcloud builds list --limit=1
 gcloud deploy releases list --delivery-pipeline=zergling-pipeline --region=us-central1
 
 # Check IAM permissions
-gcloud projects get-iam-policy PROJECT_ID --flatten="bindings[].members" --format="table(bindings.role)" --filter="bindings.members:SERVICE_ACCOUNT"
+gcloud projects get-iam-policy mainstreamwallstreet --flatten="bindings[].members" --format="table(bindings.role)" --filter="bindings.members:cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com"
+
+# Check Artifact Registry
+gcloud artifacts repositories list --location=us-central1
 ```
 
 ### Debug Issues
@@ -266,6 +289,22 @@ terraform validate
 
 # Check for syntax errors
 terraform fmt -check
+
+# Check backend configuration
+terraform init -reconfigure
+```
+
+### Check Secrets
+
+```bash
+# List all secrets
+gcloud secrets list
+
+# Check specific secret values
+gcloud secrets versions access latest --secret=zergling-api-key
+gcloud secrets versions access latest --secret=zergling-google-sa-value
+gcloud secrets versions access latest --secret=alert-from-email
+gcloud secrets versions access latest --secret=alert-recipients
 ```
 
 ## Cost Monitoring
@@ -275,14 +314,20 @@ terraform fmt -check
 gcloud billing budgets list
 
 # Check storage costs
-gsutil du -sh gs://BUCKET_NAME
+gsutil du -sh gs://zergling-data
+gsutil du -sh gs://zergling-earnings
+gsutil du -sh gs://zergling-email-queue
 
 # Check build costs
 gcloud builds list --limit=100 --format="table(id,status,createTime,logUrl)"
+
+# Check Artifact Registry usage
+gcloud artifacts docker images list us-central1-docker.pkg.dev/mainstreamwallstreet/zergling
 ```
 
 ## Security Checklist
 
+- [ ] Service accounts `cloud-run-zergling-sa` and `deploy-zergling-sa` exist
 - [ ] All secrets are stored in Secret Manager
 - [ ] Service accounts have minimal required permissions
 - [ ] Workload Identity is configured for GitHub Actions
@@ -290,6 +335,7 @@ gcloud builds list --limit=100 --format="table(id,status,createTime,logUrl)"
 - [ ] Storage buckets have appropriate IAM policies
 - [ ] API keys are rotated regularly
 - [ ] Logging is enabled for all services
+- [ ] Terraform state is stored securely in GCS
 
 ## Emergency Procedures
 
@@ -316,9 +362,68 @@ gcloud run services delete zergling-api --region=us-central1
 ### Backup Data
 
 ```bash
-# Backup storage bucket
-gsutil -m cp -r gs://SOURCE_BUCKET gs://BACKUP_BUCKET
+# Backup storage buckets
+gsutil -m cp -r gs://zergling-data gs://BACKUP_BUCKET/zergling-data
+gsutil -m cp -r gs://zergling-earnings gs://BACKUP_BUCKET/zergling-earnings
+gsutil -m cp -r gs://zergling-email-queue gs://BACKUP_BUCKET/zergling-email-queue
 
 # Export Terraform state
 terraform state pull > terraform-state-backup.json
+
+# Backup secrets
+gcloud secrets versions access latest --secret=zergling-api-key > zergling-api-key-backup.txt
+gcloud secrets versions access latest --secret=zergling-google-sa-value > zergling-google-sa-backup.json
+```
+
+### Restore from Backup
+
+```bash
+# Restore Terraform state
+terraform state push terraform-state-backup.json
+
+# Restore secrets
+gcloud secrets versions add zergling-api-key --data-file=zergling-api-key-backup.txt
+gcloud secrets versions add zergling-google-sa-value --data-file=zergling-google-sa-backup.json
+
+# Restore storage buckets
+gsutil -m cp -r gs://BACKUP_BUCKET/zergling-data gs://zergling-data
+gsutil -m cp -r gs://BACKUP_BUCKET/zergling-earnings gs://zergling-earnings
+gsutil -m cp -r gs://BACKUP_BUCKET/zergling-email-queue gs://zergling-email-queue
+```
+
+## Common Issues and Solutions
+
+### Service Account Not Found
+
+```bash
+# Error: Service account not found
+# Solution: Create required service accounts first
+gcloud iam service-accounts create cloud-run-zergling-sa --display-name="Cloud Run Zergling Service Account"
+gcloud iam service-accounts create deploy-zergling-sa --display-name="Deploy Zergling Service Account"
+```
+
+### Permission Denied
+
+```bash
+# Error: Permission denied on resource
+# Solution: Check and grant required permissions
+gcloud projects add-iam-policy-binding mainstreamwallstreet --member="serviceAccount:cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com" --role="roles/secretmanager.secretAccessor"
+```
+
+### Secret Not Found
+
+```bash
+# Error: Secret not found
+# Solution: Create and populate secrets
+gcloud secrets create zergling-api-key --replication-policy="automatic"
+gcloud secrets versions add zergling-api-key --data-file=<(echo -n "your-actual-api-key")
+```
+
+### Cloud Deploy Pipeline Fails
+
+```bash
+# Error: Release render operation ended in failure
+# Solution: Check Cloud Deploy configuration and service account permissions
+gcloud deploy targets describe dev --region=us-central1
+gcloud projects get-iam-policy mainstreamwallstreet --flatten="bindings[].members" --format="table(bindings.role)" --filter="bindings.members:deploy-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com"
 ``` 

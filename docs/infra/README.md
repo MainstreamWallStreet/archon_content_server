@@ -6,40 +6,41 @@ This document describes the Terraform infrastructure for the Zergling FastAPI se
 
 The Terraform configuration in the `infra/` directory sets up a complete Google Cloud Platform (GCP) infrastructure for running the Zergling FastAPI server in production. It includes:
 
-- **Cloud Run Service**: The main application hosting
+- **Cloud Run Service**: The main application hosting (deployed via Cloud Deploy)
 - **Artifact Registry**: Docker image storage
 - **Cloud Storage Buckets**: Data storage for the application
 - **Secret Manager**: Secure storage for API keys and credentials
 - **Cloud Deploy**: CI/CD pipeline infrastructure
 - **IAM Service Accounts**: Security and permissions management
 - **Workload Identity**: GitHub Actions integration
+- **Remote State Storage**: GCS backend for Terraform state
 
 ## Infrastructure Components
 
-### 1. Cloud Run Service (`google_cloud_run_service.zergling`)
+### 1. Cloud Run Service (Deployed via Cloud Deploy)
 
 **Purpose**: Hosts the FastAPI application in a serverless environment.
 
 **What it does**:
-- Deploys the Docker container to Cloud Run
-- Configures environment variables from Secret Manager
-- Sets up service account with necessary permissions
-- Enables public access (can be restricted if needed)
+- Deployed via Cloud Deploy pipeline (not directly in Terraform)
+- Uses service account with necessary permissions
+- Configured with environment variables from Secret Manager
+- Publicly accessible (can be restricted if needed)
 
 **Customization needed**:
-- `service_name`: Change from "zergling-api" to your service name
-- `location`: Change region if needed (default: us-central1)
-- `max_instances`: Adjust based on expected load
-- `cpu` and `memory`: Adjust based on application requirements
+- Service name is configured in `clouddeploy/service.yaml`
+- Environment variables are set via Secret Manager
+- Service account permissions are managed in Terraform
 
 ### 2. Artifact Registry (`google_artifact_registry_repository.docker_repo`)
 
 **Purpose**: Stores Docker images for deployment.
 
 **What it does**:
-- Creates a private Docker repository
-- Configures IAM permissions for Cloud Build and Cloud Run
+- Creates a private Docker repository named "zergling"
+- Configures IAM permissions for Cloud Build to write images
 - Enables image versioning and management
+- Located in the specified region (default: us-central1)
 
 **Customization needed**:
 - `repository_id`: Change from "zergling" to your repository name
@@ -50,53 +51,54 @@ The Terraform configuration in the `infra/` directory sets up a complete Google 
 **Purpose**: Provides persistent storage for application data.
 
 **Buckets created**:
-- `zergling-data`: General application data
-- `zergling-earnings`: Financial data (if applicable)
-- `zergling-email-queue`: Email processing queue
+- `zergling-data`: General application data (read access)
+- `zergling-earnings`: Financial data (admin access)
+- `zergling-email-queue`: Email processing queue (admin access)
+- `zergling-tf-state-202407`: Terraform state storage (write access for logs)
 
 **What they do**:
-- Configure appropriate IAM permissions
-- Set up lifecycle policies for data management
-- Enable versioning and access controls
+- Configure appropriate IAM permissions for Cloud Run service account
+- Enable uniform bucket-level access for security
+- Support application data storage and processing
 
 **Customization needed**:
 - `bucket_names`: Change to match your application's data structure
 - `location`: Change region if needed
-- `lifecycle_rules`: Adjust based on data retention requirements
-- Add/remove buckets based on your application needs
+- `permissions`: Adjust based on your application's access patterns
 
 ### 4. Secret Manager
 
 **Purpose**: Securely stores sensitive configuration data.
 
 **Secrets created**:
-- `zergling-api-key`: API authentication key
-- `zergling-google-sa-value`: Service account credentials
-- `alert-from-email`: Email sender address
-- `alert-recipients`: Email recipient list
+- `zergling-api-key`: API authentication key for application endpoints
+- `zergling-google-sa-value`: Service account credentials JSON
+- `alert-from-email`: Email sender address for notifications
+- `alert-recipients`: Email recipient list for alerts
 
 **What it does**:
-- Creates secrets with proper access controls
+- Creates secrets with automatic replication
 - Sets initial values (you'll need to update these)
 - Configures IAM permissions for Cloud Run access
 
 **Customization needed**:
 - **CRITICAL**: Update all secret values with your actual data
 - `secret_ids`: Change to match your naming convention
-- Add additional secrets as needed for your application
+- `secret_data`: Replace placeholder values with real credentials
 
 ### 5. Cloud Deploy Pipeline
 
 **Purpose**: Enables automated CI/CD from GitHub to Cloud Run.
 
 **Components**:
-- `google_clouddeploy_delivery_pipeline.zergling`: Main pipeline
-- `google_clouddeploy_target.dev`: Development target
+- `google_clouddeploy_delivery_pipeline.zergling`: Main pipeline named "zergling-pipeline"
+- `google_clouddeploy_target.dev`: Development target named "dev"
 
 **What it does**:
 - Creates a delivery pipeline for automated deployments
 - Configures Cloud Run as the deployment target
 - Sets up service account permissions for deployment
+- Uses the deploy service account for execution
 
 **Customization needed**:
 - `pipeline_name`: Change from "zergling-pipeline" to your pipeline name
@@ -107,7 +109,7 @@ The Terraform configuration in the `infra/` directory sets up a complete Google 
 
 **Purpose**: Provides secure, least-privilege access to GCP resources.
 
-**Service accounts created**:
+**Service accounts referenced** (must exist before Terraform):
 - `cloud-run-zergling-sa`: Runs the Cloud Run service
 - `deploy-zergling-sa`: Handles Cloud Deploy operations
 
@@ -117,9 +119,9 @@ The Terraform configuration in the `infra/` directory sets up a complete Google 
 - Support Workload Identity for GitHub Actions
 
 **Customization needed**:
+- **PREREQUISITE**: Create service accounts before running Terraform
 - `service_account_names`: Change to match your naming convention
 - `permissions`: Adjust based on your application's specific needs
-- Add additional service accounts if needed
 
 ### 7. Workload Identity
 
@@ -129,52 +131,52 @@ The Terraform configuration in the `infra/` directory sets up a complete Google 
 - Creates a Workload Identity Pool for GitHub
 - Configures OIDC provider for GitHub Actions
 - Grants necessary permissions to the Cloud Run service account
+- Restricts access to specific GitHub repositories
 
 **Customization needed**:
 - `pool_name`: Change from "zergling-github-pool-v3"
 - `provider_name`: Change from "zergling-github-provider"
-- `repository`: Update to your GitHub repository name
+- `github_owner` and `github_repo`: Update to your GitHub repository
+- `attribute_condition`: Update repository filter if needed
+
+### 8. Remote State Storage
+
+**Purpose**: Stores Terraform state in GCS for team collaboration and state persistence.
+
+**What it does**:
+- Uses GCS bucket `zergling-tf-state-202407` for state storage
+- Enables team collaboration on infrastructure changes
+- Provides state locking and consistency
+
+**Customization needed**:
+- `bucket_name`: Change to your project's state bucket
+- `prefix`: Adjust if needed for multiple environments
 
 ## Required Customizations
 
 ### 1. Project and Region Settings
 
-**File**: `infra/variables.tf`
+**File**: `infra/terraform.tfvars`
 
 ```hcl
-variable "project_id" {
-  description = "GCP Project ID"
-  type        = string
-  default     = "your-project-id"  # CHANGE THIS
-}
-
-variable "region" {
-  description = "GCP Region"
-  type        = string
-  default     = "us-central1"  # Change if needed
-}
+project = "your-project-id"  # CHANGE THIS
+region = "us-central1"       # Change if needed
+github_owner = "YourGitHubUsername"  # CHANGE THIS
+github_repo = "your-repository-name"  # CHANGE THIS
 ```
 
-### 2. Service Names and Buckets
+### 2. Service Account Prerequisites
 
-**File**: `infra/main.tf`
+**CRITICAL**: You must create these service accounts before running Terraform:
 
-Update all resource names to match your application:
+```bash
+# Create Cloud Run service account
+gcloud iam service-accounts create cloud-run-zergling-sa \
+  --display-name="Cloud Run Zergling Service Account"
 
-```hcl
-# Cloud Run Service
-resource "google_cloud_run_service" "zergling" {
-  name     = "your-service-name"  # CHANGE THIS
-  location = var.region
-  # ...
-}
-
-# Storage Buckets
-resource "google_storage_bucket" "zergling_data" {
-  name          = "your-app-data"  # CHANGE THIS
-  location      = var.region
-  # ...
-}
+# Create deployment service account
+gcloud iam service-accounts create deploy-zergling-sa \
+  --display-name="Deploy Zergling Service Account"
 ```
 
 ### 3. Secret Values
@@ -193,7 +195,17 @@ gcloud secrets versions add alert-from-email --data-file=<(echo -n "your-email@d
 gcloud secrets versions add alert-recipients --data-file=<(echo -n "recipient1@domain.com,recipient2@domain.com")
 ```
 
-### 4. GitHub Repository
+### 4. Storage Bucket Names
+
+**File**: `infra/terraform.tfvars`
+
+```hcl
+earnings_bucket = "your-app-earnings"
+email_queue_bucket = "your-app-email-queue"
+example_bucket = "your-example-bucket"
+```
+
+### 5. GitHub Repository Configuration
 
 **File**: `infra/main.tf`
 
@@ -202,30 +214,28 @@ Update the Workload Identity configuration:
 ```hcl
 resource "google_iam_workload_identity_pool_provider" "github_provider_v3" {
   # ...
-  attribute_mapping = {
-    "google.subject"       = "assertion.sub"
-    "attribute.actor"      = "assertion.actor"
-    "attribute.repository" = "assertion.repository"
-  }
-  
-  oidc {
-    issuer_uri = "https://token.actions.githubusercontent.com"
-    allowed_audiences = [
-      "https://github.com/YourGitHubUsername/YourRepositoryName"  # CHANGE THIS
-    ]
-  }
+  attribute_condition = "attribute.repository == \"YourGitHubUsername/YourRepositoryName\""
 }
 ```
 
 ## Deployment Process
 
-### 1. Initial Setup
+### 1. Prerequisites
+
+```bash
+# Ensure you have the required service accounts
+gcloud iam service-accounts list | grep -E "(cloud-run-zergling-sa|deploy-zergling-sa)"
+
+# If not, create them (see Service Account Prerequisites above)
+```
+
+### 2. Initial Setup
 
 ```bash
 # Navigate to infra directory
 cd infra
 
-# Initialize Terraform
+# Initialize Terraform (will download providers and configure backend)
 terraform init
 
 # Plan the deployment
@@ -235,7 +245,7 @@ terraform plan
 terraform apply
 ```
 
-### 2. Update Secrets
+### 3. Update Secrets
 
 After the infrastructure is created, update the secret values:
 
@@ -247,14 +257,17 @@ gcloud secrets versions add zergling-api-key --data-file=<(echo -n "your-actual-
 gcloud secrets versions add zergling-google-sa-value --data-file=path/to/service-account.json
 ```
 
-### 3. Deploy Application
+### 4. Deploy Application
 
 ```bash
 # Build and push Docker image
 docker build -t gcr.io/your-project-id/your-service-name .
 docker push gcr.io/your-project-id/your-service-name
 
-# Deploy to Cloud Run
+# Deploy via Cloud Deploy (recommended)
+./scripts/test_deployment.sh
+
+# Or deploy directly to Cloud Run
 gcloud run deploy your-service-name \
   --image gcr.io/your-project-id/your-service-name \
   --platform managed \
@@ -266,10 +279,20 @@ gcloud run deploy your-service-name \
 
 ### 1. Service Account Permissions
 
-The service accounts are configured with minimal required permissions. Review and adjust based on your needs:
+The service accounts are configured with minimal required permissions:
 
-- `cloud-run-zergling-sa`: Needs access to Cloud Storage, Secret Manager
-- `deploy-zergling-sa`: Needs Cloud Run admin and deployment permissions
+- `cloud-run-zergling-sa`: 
+  - Cloud Build builder
+  - Cloud Run admin
+  - Secret Manager accessor
+  - Storage object viewer/admin (varies by bucket)
+  - Service account token creator
+  - Service account user
+  - Run invoker
+
+- `deploy-zergling-sa`:
+  - Cloud Run admin
+  - Service account user
 
 ### 2. Secret Management
 
@@ -283,6 +306,12 @@ The service accounts are configured with minimal required permissions. Review an
 - Cloud Run services are publicly accessible by default
 - Consider using VPC connectors for private network access
 - Implement proper authentication and authorization
+
+### 4. Workload Identity Security
+
+- Repository access is restricted to specific GitHub repositories
+- Attribute conditions prevent unauthorized access
+- Service account permissions are scoped to specific resources
 
 ## Cost Optimization
 
@@ -303,13 +332,18 @@ The service accounts are configured with minimal required permissions. Review an
 - Clean up old Docker images regularly
 - Use appropriate retention policies
 
+### 4. Secret Manager
+
+- Delete unused secret versions
+- Monitor secret access patterns
+
 ## Monitoring and Logging
 
 ### 1. Cloud Run Logs
 
 ```bash
 # View service logs
-gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=your-service-name"
+gcloud logging read "resource.type=cloud_run_revision AND resource.labels.service_name=zergling-api"
 ```
 
 ### 2. Cloud Build Logs
@@ -323,23 +357,38 @@ gcloud builds list --limit=10
 
 ```bash
 # View deployment logs
-gcloud deploy releases list --delivery-pipeline=your-pipeline-name --region=us-central1
+gcloud deploy releases list --delivery-pipeline=zergling-pipeline --region=us-central1
+```
+
+### 4. Terraform State
+
+```bash
+# View current state
+terraform show
+
+# List all resources
+terraform state list
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Permission Denied**: Check service account permissions
-2. **Secret Not Found**: Ensure secrets are created and accessible
-3. **Build Failures**: Check Dockerfile and build configuration
-4. **Deployment Failures**: Verify Cloud Deploy configuration
+1. **Service Account Not Found**: Ensure service accounts exist before running Terraform
+2. **Permission Denied**: Check service account permissions
+3. **Secret Not Found**: Ensure secrets are created and accessible
+4. **Build Failures**: Check Dockerfile and build configuration
+5. **Deployment Failures**: Verify Cloud Deploy configuration
+
+### Debug Log
+
+See `infra/debug-log.md` for detailed troubleshooting information and common issues encountered during deployment.
 
 ### Useful Commands
 
 ```bash
 # Check service status
-gcloud run services describe your-service-name --region=us-central1
+gcloud run services describe zergling-api --region=us-central1
 
 # View service logs
 gcloud logging read "resource.type=cloud_run_revision"
@@ -349,16 +398,29 @@ gcloud projects get-iam-policy your-project-id
 
 # List all resources
 terraform state list
+
+# Validate Terraform configuration
+terraform validate
 ```
+
+## Outputs
+
+The Terraform configuration provides these outputs:
+
+- `workload_identity_provider`: Full path of the Workload Identity provider
+- `cloud_run_service_account`: Email of the Cloud Run service account
+- `project_id`: The project ID
+- `project_number`: The project number
 
 ## Next Steps
 
-1. **Customize all resource names** to match your application
-2. **Update secret values** with your actual data
-3. **Configure GitHub repository** in Workload Identity
-4. **Test the deployment pipeline**
-5. **Set up monitoring and alerting**
-6. **Configure additional environments** (staging, production)
+1. **Create required service accounts** before running Terraform
+2. **Customize all resource names** to match your application
+3. **Update secret values** with your actual data
+4. **Configure GitHub repository** in Workload Identity
+5. **Test the deployment pipeline**
+6. **Set up monitoring and alerting**
+7. **Configure additional environments** (staging, production)
 
 ## Support
 
@@ -367,4 +429,5 @@ For issues with this infrastructure:
 1. Check the [Terraform documentation](https://www.terraform.io/docs)
 2. Review [Google Cloud documentation](https://cloud.google.com/docs)
 3. Check the application logs for specific error messages
-4. Verify all customizations have been applied correctly 
+4. Verify all customizations have been applied correctly
+5. Review `infra/debug-log.md` for common issues and solutions 
