@@ -17,12 +17,13 @@ steps:
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:latest'
       - '.'
 
-  # 2. Push
+  # 2. Push image
   - id: Push
     name: gcr.io/cloud-builders/docker
     args:
       - push
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
+    waitFor: ['Build']
 
   # 3. Deploy to Cloud Run
   - id: Deploy
@@ -44,15 +45,35 @@ steps:
       - '--set-env-vars=EXAMPLE_BUCKET=zergling-data,DEBUG=false,LOG_LEVEL=INFO'
       - '--set-secrets=ZERGLING_API_KEY=zergling-api-key:latest'
       - '--set-secrets=GOOGLE_APPLICATION_CREDENTIALS_JSON=zergling-google-sa-value:latest'
+    waitFor: ['Push']
 
   # 4. Verify deployment
   - id: Verify
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    entrypoint: curl
+    entrypoint: bash
     args:
-      - '-f'
-      - '-s'
-      - 'https://${_SERVICE}-$PROJECT_NUMBER.${_REGION}.run.app/health'
+      - '-c'
+      - |
+        echo "🏥 Verifying deployment..."
+        sleep 30
+        MAX_RETRIES=10
+        RETRY_COUNT=0
+        
+        while [ $$RETRY_COUNT -lt $$MAX_RETRIES ]; do
+          if curl -f -s "https://${_SERVICE}-$PROJECT_NUMBER.${_REGION}.run.app/health" > /dev/null; then
+            echo "✅ Health check passed!"
+            break
+          else
+            echo "   Health check failed (attempt $$((RETRY_COUNT + 1))/$$MAX_RETRIES)"
+            RETRY_COUNT=$$((RETRY_COUNT + 1))
+            if [ $$RETRY_COUNT -eq $$MAX_RETRIES ]; then
+              echo "❌ Health check failed after $$MAX_RETRIES attempts"
+              exit 1
+            fi
+            sleep 10
+          fi
+        done
+    waitFor: ['Deploy']
 
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
