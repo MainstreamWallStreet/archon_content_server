@@ -1,38 +1,45 @@
+substitutions:
+  _REGION: us-central1
+  _PIPELINE: zergling-pipeline
+  _SERVICE: zergling
+
 steps:
-  # Build the Docker image
-  - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'buildx', 'build',
-      '--platform', 'linux/amd64',
-      '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/zergling/zergling:${_COMMIT_SHA}',
-      '-t', 'us-central1-docker.pkg.dev/$PROJECT_ID/zergling/zergling:latest',
-      '.',
-      '--push'
-    ]
+  # 1. Build image
+  - id: Build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '--progress=plain'
+      - '-f'
+      - Dockerfile
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
+      - '.'
 
-  # Push to Artifact Registry
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'us-central1-docker.pkg.dev/$PROJECT_ID/zergling/zergling:${_COMMIT_SHA}']
+  # 2. Push
+  - id: Push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
 
-  # Create a Cloud Deploy release
-  - name: 'gcr.io/cloud-builders/gcloud'
-    args: [
-      'deploy', 'releases', 'create', 'rel-${_COMMIT_SHA}',
-      '--delivery-pipeline=${_PIPELINE}',
-      '--region=${_REGION}',
-      '--images=zergling=us-central1-docker.pkg.dev/$PROJECT_ID/zergling/zergling:${_COMMIT_SHA}',
-      '--to-target=${_TARGET}'
-    ]
+  # 3. Cloud Deploy release
+  - id: Release
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - deploy
+      - releases
+      - create
+      - 'rel-$BUILD_ID'
+      - '--delivery-pipeline=${_PIPELINE}'
+      - '--region=${_REGION}'
+      - '--images=${_SERVICE}=${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
 
-# Store images in Artifact Registry
 images:
-  - 'us-central1-docker.pkg.dev/$PROJECT_ID/zergling/zergling:${_COMMIT_SHA}'
-  - 'us-central1-docker.pkg.dev/$PROJECT_ID/zergling/zergling:latest'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
 
-# Build options
 options:
   logging: CLOUD_LOGGING_ONLY
-  machineType: 'E2_HIGHCPU_8'
 
-# Timeout
-timeout: '1200s'
+timeout: '900s'

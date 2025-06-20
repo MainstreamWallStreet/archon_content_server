@@ -18,7 +18,6 @@ echo "🔨 Starting Cloud Build..."
 gcloud builds submit \
   --project=$PROJECT_ID \
   --config=cloudbuild.yaml \
-  --substitutions=_COMMIT_SHA=$COMMIT_SHA,_PIPELINE=$PIPELINE,_REGION=$REGION,_TARGET=$TARGET \
   .
 
 echo "✅ Cloud Build completed successfully!"
