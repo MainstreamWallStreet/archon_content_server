@@ -15,10 +15,8 @@ def main():
     
     # Verify required environment variables
     required_vars = [
-        "APP_NAME",
-        "API_KEY", 
-        "GOOGLE_CLOUD_PROJECT",
-        "STORAGE_BUCKET"
+        "ZERGLING_API_KEY",
+        "EXAMPLE_BUCKET"
     ]
     
     missing_vars = [var for var in required_vars if not os.getenv(var)]
@@ -34,13 +32,13 @@ def main():
     os.makedirs("logs", exist_ok=True)
     
     # Get configuration
-    app_name = os.getenv("APP_NAME", "fastapi-template")
+    app_name = "Zergling FastAPI Server"
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8080"))
     reload = os.getenv("ENV", "dev") == "dev"
     
     # Run the server
-    print(f"🚀 Starting {app_name} server...")
+    print(f"🚀 Starting {app_name}...")
     print(f"📝 API documentation available at http://localhost:{port}/docs")
     print(f"🔍 Health check available at http://localhost:{port}/health")
     

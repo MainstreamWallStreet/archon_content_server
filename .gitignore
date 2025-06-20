@@ -233,3 +233,4 @@ node_modules/
 # Ignore local scripts/output
 *.bak
 *.swp
+gcp-service-account.json

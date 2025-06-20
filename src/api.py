@@ -59,7 +59,7 @@ def get_data_store() -> DataStore:
     """Get the data store instance."""
     global data_store
     if data_store is None:
-        bucket_name = get_setting("STORAGE_BUCKET")
+        bucket_name = get_setting("EXAMPLE_BUCKET")
         data_store = GcsStore(bucket_name)
     return data_store
 
@@ -74,7 +74,7 @@ def get_scheduler_instance() -> BackgroundScheduler:
 
 def validate_api_key(api_key: str = Security(API_KEY_HEADER)) -> str:
     """Validate the API key."""
-    expected_key = get_setting("API_KEY")
+    expected_key = get_setting("ZERGLING_API_KEY")
     if not secrets.compare_digest(api_key, expected_key):
         raise HTTPException(
             status_code=401,

@@ -113,18 +113,13 @@ def invalid_api_key_header() -> dict:
     return {"X-API-Key": "invalid-key"}
 
 
-@pytest.fixture
-def mock_env_vars() -> None:
-    """Set up mock environment variables for testing."""
-    test_env = {
-        "APP_NAME": "test-app",
-        "API_KEY": "test-api-key",
-        "GOOGLE_CLOUD_PROJECT": "test-project",
-        "STORAGE_BUCKET": "test-bucket",
-        "ENV": "test"
-    }
-    
-    with patch.dict(os.environ, test_env):
+@pytest.fixture(autouse=True)
+def test_env():
+    """Set up test environment variables."""
+    with patch.dict(os.environ, {
+        "ZERGLING_API_KEY": "test-api-key",
+        "EXAMPLE_BUCKET": "test-bucket",
+    }):
         yield
 
 
