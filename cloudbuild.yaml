@@ -1,7 +1,6 @@
 substitutions:
   _REGION: us-central1
-  _PIPELINE: zergling-pipeline
-  _SERVICE: zergling
+  _SERVICE: zergling-api
 
 steps:
   # 1. Build image
@@ -14,6 +13,8 @@ steps:
       - Dockerfile
       - '-t'
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:latest'
       - '.'
 
   # 2. Push
@@ -23,21 +24,39 @@ steps:
       - push
       - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
 
-  # 3. Cloud Deploy release
-  - id: Release
+  # 3. Deploy to Cloud Run
+  - id: Deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
+      - run
       - deploy
-      - releases
-      - create
-      - 'rel-$BUILD_ID'
-      - '--delivery-pipeline=${_PIPELINE}'
+      - ${_SERVICE}
+      - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
       - '--region=${_REGION}'
-      - '--images=${_SERVICE}=${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--memory=4Gi'
+      - '--cpu=2'
+      - '--concurrency=2'
+      - '--timeout=300'
+      - '--service-account=cloud-run-zergling-sa@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--set-env-vars=EXAMPLE_BUCKET=zergling-data,DEBUG=false,LOG_LEVEL=INFO'
+      - '--set-secrets=ZERGLING_API_KEY=zergling-api-key:latest'
+      - '--set-secrets=GOOGLE_APPLICATION_CREDENTIALS_JSON=zergling-google-sa-value:latest'
+
+  # 4. Verify deployment
+  - id: Verify
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: curl
+    args:
+      - '-f'
+      - '-s'
+      - 'https://${_SERVICE}-$PROJECT_NUMBER.${_REGION}.run.app/health'
 
 images:
   - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY

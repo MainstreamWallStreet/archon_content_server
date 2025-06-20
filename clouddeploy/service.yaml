@@ -3,8 +3,6 @@ apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: zergling-api
-  annotations:
-    run.googleapis.com/execution-environment: gen2
 spec:
   template:
     metadata:
@@ -15,13 +13,15 @@ spec:
         run.googleapis.com/container-concurrency: "2" # requests handled in parallel
         # keep full CPU even while idle (optional, costs more)
         run.googleapis.com/cpu-throttling: "false"
-        # ───────── service account ─────────
-        run.googleapis.com/service-account: "cloud-run-zergling-sa@${PROJECT_ID}.iam.gserviceaccount.com"
-        run.googleapis.com/execution-environment: gen2
     spec:
-      # ───────── environment variables ─────────
-      containerConcurrency: 2
-      timeoutSeconds: 300
+      volumes:
+        # ───── Secret-backed volume for Google SA ─────
+        - name: google-sa
+          secret:
+            secretName: zergling-google-sa-value
+            items:
+              - key: latest
+                path: google-sa.json
       containers:
         - name: zergling
           image: zergling                   # 🔄 Cloud Deploy patches this tag
@@ -46,15 +46,7 @@ spec:
             - secretRef:
                 name: zergling-api-key
                 key: latest
-            - secretRef:
-                name: zergling-google-sa-value
-                key: latest
           volumeMounts:
             - name: google-sa
               mountPath: /secrets
               readOnly: true
-      volumes:
-        - name: google-sa
-          secret:
-            secretName: zergling-google-sa-value
-      serviceAccountName: cloud-run-zergling-sa@${PROJECT_ID}.iam.gserviceaccount.com

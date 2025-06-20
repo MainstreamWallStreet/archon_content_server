@@ -1,13 +1,12 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Testing Zergling Cloud Deploy Pipeline..."
+echo "🚀 Testing Zergling Direct Cloud Run Deployment..."
 
 # Set variables
 PROJECT_ID="mainstreamwallstreet"
 REGION="us-central1"
-PIPELINE="zergling-pipeline"
-TARGET="dev"
+SERVICE_NAME="zergling-api"
 
 # Get the current commit SHA
 COMMIT_SHA=$(git rev-parse --short HEAD)
@@ -18,69 +17,14 @@ echo "🔨 Starting Cloud Build..."
 gcloud builds submit \
   --project=$PROJECT_ID \
   --config=cloudbuild.yaml \
+  --substitutions=_REGION=$REGION,_SERVICE=$SERVICE_NAME \
   .
 
 echo "✅ Cloud Build completed successfully!"
 
-# Wait for the release to be created
-echo "⏳ Waiting for Cloud Deploy release to be created..."
-sleep 10
-
-# Get the latest release
-LATEST_RELEASE=$(gcloud deploy releases list \
-  --delivery-pipeline=$PIPELINE \
-  --region=$REGION \
-  --limit=1 \
-  --format="value(name.basename())")
-
-echo "🎯 Latest release: $LATEST_RELEASE"
-
-# Monitor render phase
-echo "🔄 Monitoring render phase..."
-while true; do
-  RENDER_STATE=$(gcloud deploy releases describe $LATEST_RELEASE \
-    --delivery-pipeline=$PIPELINE \
-    --region=$REGION \
-    --format="value(renderState)")
-  
-  echo "   Render state: $RENDER_STATE"
-  
-  if [ "$RENDER_STATE" = "SUCCEEDED" ]; then
-    echo "✅ Render phase completed successfully!"
-    break
-  elif [ "$RENDER_STATE" = "FAILED" ]; then
-    echo "❌ Render phase failed!"
-    exit 1
-  fi
-  
-  sleep 10
-done
-
-# Monitor rollout
-echo "🚀 Monitoring rollout..."
-while true; do
-  ROLLOUT_STATE=$(gcloud deploy rollouts list \
-    --delivery-pipeline=$PIPELINE \
-    --release=$LATEST_RELEASE \
-    --region=$REGION \
-    --limit=1 \
-    --format="value(state)")
-  
-  echo "   Rollout state: $ROLLOUT_STATE"
-  
-  if [ "$ROLLOUT_STATE" = "SUCCEEDED" ]; then
-    echo "✅ Rollout completed successfully!"
-    break
-  elif [ "$ROLLOUT_STATE" = "FAILED" ]; then
-    echo "❌ Rollout failed!"
-    exit 1
-  fi
-  
-  sleep 10
-done
-
 # Get the Cloud Run service URL
-SERVICE_URL=$(gcloud run services describe zergling-api \
+echo "🌐 Getting service URL..."
+SERVICE_URL=$(gcloud run services describe $SERVICE_NAME \
   --region=$REGION \
   --format="value(status.url)")
 
@@ -116,7 +60,6 @@ echo ""
 echo "🎉 Deployment completed successfully!"
 echo "📊 Final status:"
 echo "   - Cloud Build: ✅ SUCCESS"
-echo "   - Cloud Deploy Render: ✅ SUCCEEDED"
-echo "   - Cloud Deploy Rollout: ✅ SUCCEEDED"
-echo "   - Cloud Run Health: ✅ PASSED"
+echo "   - Cloud Run Deployment: ✅ SUCCESS"
+echo "   - Health Check: ✅ PASSED"
 echo "🌐 Service URL: $SERVICE_URL" 

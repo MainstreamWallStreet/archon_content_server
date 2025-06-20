@@ -4,143 +4,116 @@ on:
   push:
     branches: [main]
 
+env:
+  PROJECT_ID: mainstreamwallstreet
+  REGION: us-central1
+  SERVICE_NAME: zergling-api
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    name: Deploy to Cloud Run
-    
     permissions:
-      id-token: write
       contents: read
-      
+      id-token: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
-      - name: Authenticate to Google Cloud
+
+      - name: Google Auth
         id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.CLOUD_RUN_SERVICE_ACCOUNT }}
-          
-      - name: Set up Google Cloud CLI
+
+      - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          
-      - name: Configure Docker for Artifact Registry
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker
+
+      - name: Build and Deploy
         run: |
-          gcloud auth configure-docker us-central1-docker.pkg.dev
+          echo "🚀 Starting deployment..."
           
-      - name: Build and push Docker image
-        run: |
-          # Get short commit SHA for image tag
-          COMMIT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          
-          # Build and push image
-          docker build -t us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/zergling/zergling:$COMMIT_SHA .
-          docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/zergling/zergling:$COMMIT_SHA
-          
-          # Also tag as latest
-          docker tag us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/zergling/zergling:$COMMIT_SHA \
-                    us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/zergling/zergling:latest
-          docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/zergling/zergling:latest
-          
-          echo "IMAGE_TAG=$COMMIT_SHA" >> $GITHUB_ENV
-          
-      - name: Deploy via Cloud Deploy
-        run: |
-          # Submit build to trigger Cloud Deploy pipeline
+          # Submit build to Cloud Build
           gcloud builds submit \
-            --config cloudbuild.yaml \
-            --substitutions=_COMMIT_SHA=${{ env.IMAGE_TAG }},_REGION=us-central1,_PIPELINE=zergling-pipeline,_SERVICE=zergling-api
+            --config=cloudbuild.yaml \
+            --substitutions=_REGION=${{ env.REGION }},_SERVICE=${{ env.SERVICE_NAME }} \
+            .
           
-      - name: Wait for deployment
+          echo "✅ Deployment completed!"
+
+      - name: Get Service URL
+        id: service-url
         run: |
-          echo "Waiting for Cloud Deploy to complete..."
+          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --format="value(status.url)")
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "🌐 Service URL: $URL"
+
+      - name: Verify Deployment
+        run: |
+          echo "🏥 Verifying deployment..."
+          
+          # Wait for service to be ready
           sleep 30
           
-          # Check deployment status
-          RELEASES=$(gcloud deploy releases list --delivery-pipeline=zergling-pipeline --region=us-central1 --limit=1 --format="value(name)")
-          if [ -n "$RELEASES" ]; then
-            LATEST_RELEASE=$(echo "$RELEASES" | head -1)
-            echo "Latest release: $LATEST_RELEASE"
-            
-            # Wait for rollout to complete
-            gcloud deploy rollouts list --delivery-pipeline=zergling-pipeline --release=$LATEST_RELEASE --region=us-central1 --format="value(state)" | while read state; do
-              if [ "$state" = "SUCCEEDED" ]; then
-                echo "✅ Deployment successful!"
-                break
-              elif [ "$state" = "FAILED" ]; then
-                echo "❌ Deployment failed!"
-                exit 1
-              else
-                echo "⏳ Deployment in progress... (state: $state)"
-                sleep 10
-              fi
-            done
-          else
-            echo "No releases found"
-            exit 1
-          fi
-          
-      - name: Verify deployment
-        id: verify
-        run: |
-          # Get service URL
-          SERVICE_URL=$(gcloud run services describe zergling-api --region=us-central1 --format="value(status.url)")
-          echo "service_url=$SERVICE_URL" >> $GITHUB_OUTPUT
-          echo "Service URL: $SERVICE_URL"
-          
           # Test health endpoint
-          echo "Testing health endpoint..."
+          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --format="value(status.url)")
+          
           for i in {1..10}; do
-            if curl -f "$SERVICE_URL/health" > /dev/null 2>&1; then
+            if curl -f -s "$URL/health" > /dev/null; then
               echo "✅ Health check passed!"
               break
             else
-              echo "⏳ Health check attempt $i/10..."
+              echo "   Health check failed (attempt $i/10)"
+              if [ $i -eq 10 ]; then
+                echo "❌ Health check failed after 10 attempts"
+                exit 1
+              fi
               sleep 10
             fi
           done
-          
-      - name: Create deployment summary
-        if: always()
+
+      - name: Create Deployment Summary
         uses: actions/github-script@v7
         with:
           script: |
-            const { data: commits } = await github.rest.repos.listCommits({
+            const { data: commits } = await github.rest.repos.compareCommits({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              sha: 'main',
-              per_page: 1,
+              base: context.payload.before,
+              head: context.payload.after
             });
             
-            const latestCommit = commits[0];
-            const serviceUrl = '${{ steps.verify.outputs.service_url }}' || 'https://zergling-api-455624753981.us-central1.run.app';
-            const jobStatus = '${{ job.status }}';
+            const commitMessages = commits.commits
+              .map(commit => `- ${commit.commit.message.split('\n')[0]}`)
+              .join('\n');
             
-            const commentBody = `## 🚀 Deployment Complete
+            const summary = `## 🚀 Deployment Summary
             
-            **Status:** ${jobStatus === 'success' ? '✅ SUCCESS' : '❌ FAILED'}
-            **Branch:** \`main\`
-            **Commit:** \`${latestCommit.sha.substring(0, 7)}\` - ${latestCommit.commit.message}
-            **Deployed by:** @${{ github.actor }}
-            **Service URL:** ${serviceUrl}
+            **Status**: ✅ Successfully deployed to production
             
-            ${jobStatus === 'success' ? 
-              '🎉 Application has been successfully deployed to production!' :
-              '❌ Deployment failed. Check the logs for details.'
-            }
+            **Service**: ${{ env.SERVICE_NAME }}
+            **Region**: ${{ env.REGION }}
+            **URL**: ${{ steps.service-url.outputs.url }}
+            
+            **Changes in this deployment**:
+            ${commitMessages}
+            
+            **Health Check**: ✅ Passed
             
             ---
-            *This deployment was automatically triggered by merging to main.*`;
+            *Deployed via GitHub Actions at ${new Date().toISOString()}*`;
             
-            // Create a deployment comment in the repository
-            await github.rest.repos.createCommitComment({
+            await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              commit_sha: latestCommit.sha,
-              body: commentBody,
+              issue_number: context.issue.number,
+              body: summary
             }); 

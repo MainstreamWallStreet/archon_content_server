@@ -2,14 +2,14 @@ apiVersion: skaffold/v2beta29
 kind: Config
 metadata:
   name: zergling
-build:
-  artifacts:
-    - image: us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling
-      docker:
-        dockerfile: Dockerfile
-  tagPolicy:
-    sha256: {}
+
+# The rendered Cloud Run service manifest that Cloud Deploy stitches in
+manifests:
+  rawYaml:
+    - clouddeploy/service.yaml
+
+# Tell Skaffold "I'm deploying to Cloud Run, not GKE"
 deploy:
-  kubectl:
-    manifests:
-      - clouddeploy/service.yaml
+  cloudrun:
+    # projectId can be omitted; Cloud Deploy injects it at runtime
+    region: us-central1
