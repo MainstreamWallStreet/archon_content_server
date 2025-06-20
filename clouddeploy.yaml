@@ -1,30 +1,36 @@
 apiVersion: deploy.cloud.google.com/v1
-kind: DeliveryPipeline
+kind: CloudRunService
 metadata:
-  name: zergling-pipeline
+  name: zergling-api
 spec:
-  description: "Zergling API deployment pipeline"
-  serialPipeline:
-    stages:
-      - targetId: dev
-        profiles: []
-        strategy:
-          standard:
-            verify: false
----
-apiVersion: deploy.cloud.google.com/v1
-kind: Target
-metadata:
-  name: dev
-spec:
-  description: "Development environment"
-  requireApproval: false
-  executionConfigs:
-    - usages:
-        - RENDER
-        - DEPLOY
-      serviceAccount: deploy-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com
-      artifactStorage: gs://us-central1.deploy-artifacts.mainstreamwallstreet.appspot.com
-      executionTimeout: 3600s
-  run:
-    location: us-central1 
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      template:
+        metadata:
+          annotations:
+            run.googleapis.com/execution-environment: gen2
+        spec:
+          containers:
+            - image: us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:latest
+              ports:
+                - containerPort: 8080
+              env:
+                - name: EXAMPLE_BUCKET
+                  value: "zergling-data"
+                - name: DEBUG
+                  value: "false"
+                - name: LOG_LEVEL
+                  value: "INFO"
+              envFrom:
+                - secretRef:
+                    name: zergling-api-key
+                    key: latest
+                - secretRef:
+                    name: zergling-google-sa-value
+                    key: latest
+          serviceAccountName: cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com
+          timeoutSeconds: 300
+          maxInstanceRequestConcurrency: 80 

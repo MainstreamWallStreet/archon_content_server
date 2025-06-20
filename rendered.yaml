@@ -33,7 +33,7 @@ spec:
             - secretRef:
                 key: latest
                 name: zergling-google-sa-value
-          image: us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:latest@sha256:afe39921c3c12ccb65d418e49b139b69d50133481ddf38eb3ae0c8b8e530bdef
+          image: us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:latest
           ports:
             - containerPort: 8080
           volumeMounts:

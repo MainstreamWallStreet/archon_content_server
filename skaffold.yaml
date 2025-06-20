@@ -1,15 +1,10 @@
-apiVersion: skaffold/v2beta29
+apiVersion: skaffold/v4beta13
 kind: Config
 metadata:
   name: zergling
-build:
-  artifacts:
-    - image: us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling
-      docker:
-        dockerfile: Dockerfile
-  tagPolicy:
-    sha256: {}
+manifests:
+  rawYaml:
+    - clouddeploy/service.yaml
 deploy:
-  kubectl:
-    manifests:
-      - clouddeploy/service.yaml
+  cloudrun:
+    region: us-central1
