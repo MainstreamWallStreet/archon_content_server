@@ -1,8 +1,21 @@
-name: CICD
+# DEPRECATED: This workflow has been replaced by separate PR test and deployment workflows
+# 
+# New workflow structure:
+# - .github/workflows/pr-test.yml: Runs tests on PR creation/updates
+# - .github/workflows/deploy.yml: Deploys to production on merge to main
+#
+# This file is kept for reference but should not be used.
 
+name: CICD (DEPRECATED)
+
+# DISABLED: This workflow is deprecated - using a dummy trigger that will never fire
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'This workflow is deprecated'
+        required: true
+        default: 'Use pr-test.yml and deploy.yml instead'
 
 jobs:
   test:
