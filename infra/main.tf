@@ -103,6 +103,13 @@ resource "google_project_iam_member" "deploy_sa_user" {
   member  = "serviceAccount:${data.google_service_account.deploy_sa.email}"
 }
 
+# Add Logs Writer role for Cloud Deploy
+resource "google_project_iam_member" "deploy_logs_writer" {
+  project = var.project
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${data.google_service_account.deploy_sa.email}"
+}
+
 resource "google_project_iam_member" "cloudbuild_deployer" {
   project = var.project
   role    = "roles/clouddeploy.releaser"

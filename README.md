@@ -42,9 +42,9 @@ A production-ready FastAPI server template with GCP integration, API key auth, G
    ```
 
 4. **Run locally:**
-   ```sh
+```sh
    python run.py
-   ```
+```
 
 5. **Access API:**
    - API: http://localhost:8080
@@ -128,7 +128,7 @@ black src/
 ```
 
 ### Local Development
-```sh
+  ```sh
 # Start with hot reload
 python run.py
 

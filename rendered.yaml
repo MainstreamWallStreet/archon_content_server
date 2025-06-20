@@ -1,0 +1,48 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  annotations:
+    run.googleapis.com/execution-environment: gen2
+  name: zergling-api
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/container-concurrency: "2"
+        run.googleapis.com/cpu: "2"
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/memory: 4Gi
+        run.googleapis.com/service-account: cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com
+    spec:
+      containerConcurrency: 2
+      containers:
+        - env:
+            - name: EXAMPLE_BUCKET
+              value: zergling-data
+            - name: DEBUG
+              value: "false"
+            - name: LOG_LEVEL
+              value: INFO
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /secrets/google-sa.json
+          envFrom:
+            - secretRef:
+                key: latest
+                name: zergling-api-key
+            - secretRef:
+                key: latest
+                name: zergling-google-sa-value
+          image: us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:latest@sha256:afe39921c3c12ccb65d418e49b139b69d50133481ddf38eb3ae0c8b8e530bdef
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - mountPath: /secrets
+              name: google-sa
+              readOnly: true
+      serviceAccountName: cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com
+      timeoutSeconds: 300
+      volumes:
+        - name: google-sa
+          secret:
+            secretName: zergling-google-sa-value
