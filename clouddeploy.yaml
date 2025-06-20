@@ -14,7 +14,7 @@ spec:
             run.googleapis.com/execution-environment: gen2
         spec:
           containers:
-            - image: us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:${_COMMIT_SHA}
+            - image: us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:latest
               ports:
                 - containerPort: 8080
               env:
