@@ -51,6 +51,169 @@ A production-ready FastAPI server template with GCP integration, API key auth, G
    - Documentation: http://localhost:8080/docs
    - Health Check: http://localhost:8080/health
 
+## Setup Checklist
+
+### Prerequisites
+- [ ] Google Cloud Platform account with billing enabled
+- [ ] GitHub repository for your project
+- [ ] Local development environment with Python 3.11+
+- [ ] Docker installed locally
+- [ ] Terraform installed locally
+- [ ] Google Cloud CLI installed and authenticated
+
+### GCP Project Setup
+- [ ] Create a new GCP project or select existing project
+- [ ] Enable required APIs:
+  - [ ] Cloud Run API
+  - [ ] Cloud Build API
+  - [ ] Secret Manager API
+  - [ ] Storage API
+  - [ ] Artifact Registry API
+  - [ ] IAM API
+- [ ] Create service accounts:
+  - [ ] Cloud Run service account (`cloud-run-zergling-sa`)
+  - [ ] Deployment service account (`deploy-zergling-sa`)
+
+### Infrastructure Deployment
+- [ ] Customize `infra/terraform.tfvars` with your project details
+- [ ] Run Terraform to create infrastructure:
+  ```sh
+  cd infra
+  terraform init
+  terraform plan
+  terraform apply
+  ```
+- [ ] Update Secret Manager values with your actual data
+- [ ] Verify infrastructure is working with manual deployment test
+
+### GitHub Actions Setup
+- [ ] Fork or create your own repository from this template
+- [ ] Configure GitHub repository secrets (see GitHub Actions Configuration below)
+- [ ] Test the CI/CD pipeline with a push to main branch
+- [ ] Verify automated deployment works correctly
+
+### Local Development Setup
+- [ ] Configure local environment variables in `.env`
+- [ ] Test local development server
+- [ ] Run test suite to ensure everything works
+- [ ] Test Docker build locally
+
+## GitHub Actions Configuration
+
+### Required Repository Secrets
+
+You must configure these secrets in your GitHub repository settings (`Settings` → `Secrets and variables` → `Actions`):
+
+#### 1. `WORKLOAD_IDENTITY_PROVIDER`
+**Description**: The Workload Identity provider for GitHub Actions to authenticate with GCP
+**Value**: Full provider path from Terraform output
+**How to get it**:
+```bash
+cd infra
+terraform output workload_identity_provider
+```
+**Example**: `projects/123456789/locations/global/workloadIdentityPools/zergling-github-pool-v3/providers/zergling-github-provider`
+
+#### 2. `CLOUD_RUN_SERVICE_ACCOUNT`
+**Description**: The service account email that GitHub Actions will impersonate
+**Value**: Service account email from Terraform output
+**How to get it**:
+```bash
+cd infra
+terraform output cloud_run_service_account
+```
+**Example**: `cloud-run-zergling-sa@your-project-id.iam.gserviceaccount.com`
+
+### Optional Repository Secrets
+
+#### 3. `GCP_PROJECT_ID`
+**Description**: Your Google Cloud project ID (if different from default)
+**Value**: Your GCP project ID
+**Example**: `my-awesome-project-123`
+
+#### 4. `GCP_REGION`
+**Description**: Your preferred GCP region (if different from default)
+**Value**: GCP region name
+**Example**: `us-central1`
+
+### Setting Up Repository Secrets
+
+1. **Navigate to your repository settings**:
+   - Go to your GitHub repository
+   - Click `Settings` tab
+   - Click `Secrets and variables` → `Actions`
+
+2. **Add each secret**:
+   - Click `New repository secret`
+   - Enter the secret name (e.g., `WORKLOAD_IDENTITY_PROVIDER`)
+   - Enter the secret value
+   - Click `Add secret`
+
+3. **Verify secrets are set**:
+   - You should see all required secrets listed
+   - Secret values are masked for security
+
+### Testing GitHub Actions
+
+1. **Push to main branch** to trigger deployment:
+   ```bash
+   git add .
+   git commit -m "test: Trigger deployment"
+   git push origin main
+   ```
+
+2. **Monitor the deployment**:
+   - Go to `Actions` tab in your repository
+   - Click on the running workflow
+   - Check each step for success/failure
+
+3. **Verify deployment**:
+   - Check that the service URL is accessible
+   - Test the health endpoint
+   - Verify logs show successful deployment
+
+### Troubleshooting GitHub Actions
+
+#### Common Issues
+
+1. **Authentication Failures**
+   - Verify `WORKLOAD_IDENTITY_PROVIDER` is correct
+   - Check that `CLOUD_RUN_SERVICE_ACCOUNT` exists and has proper permissions
+   - Ensure Workload Identity is properly configured in GCP
+
+2. **Build Failures**
+   - Check Dockerfile syntax
+   - Verify all dependencies are in `requirements.txt`
+   - Review Cloud Build logs for specific errors
+
+3. **Deployment Failures**
+   - Verify service account has Cloud Run admin permissions
+   - Check that secrets exist in Secret Manager
+   - Review Cloud Run logs for application startup issues
+
+4. **Health Check Failures**
+   - Verify application starts correctly
+   - Check environment variables and secrets are properly configured
+   - Review application logs for startup errors
+
+#### Debug Commands
+
+```bash
+# Check Workload Identity configuration
+gcloud iam workload-identity-pools providers describe zergling-github-provider \
+  --workload-identity-pool=zergling-github-pool-v3 \
+  --location=global
+
+# Verify service account permissions
+gcloud projects get-iam-policy YOUR_PROJECT_ID \
+  --flatten="bindings[].members" \
+  --format="table(bindings.role)" \
+  --filter="bindings.members:cloud-run-zergling-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com"
+
+# Test manual deployment
+./scripts/test_deployment.sh
+```
+
 ## Configuration
 
 ### Environment Variables
