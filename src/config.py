@@ -97,3 +97,5 @@ def get_setting(
         return default
 
     raise RuntimeError(f"Missing required setting: {name}")
+
+BUCKET_ENV_VAR = "EXAMPLE_BUCKET"

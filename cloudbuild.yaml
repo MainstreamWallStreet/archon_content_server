@@ -1,6 +1,6 @@
 substitutions:
   _REGION: us-central1
-  _PIPELINE: banshee-pipeline
+  _PIPELINE: zergling-pipeline
   _SERVICE: api
 
 steps:
@@ -13,7 +13,7 @@ steps:
       - '-f'
       - Dockerfile
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/banshee/banshee:$BUILD_ID'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
       - '.'
 
   # 2. Push
@@ -21,7 +21,7 @@ steps:
     name: gcr.io/cloud-builders/docker
     args:
       - push
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/banshee/banshee:$BUILD_ID'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
 
   # 3. Cloud Deploy release
   - id: Release
@@ -34,10 +34,10 @@ steps:
       - 'rel-$BUILD_ID'
       - '--delivery-pipeline=${_PIPELINE}'
       - '--region=${_REGION}'
-      - '--images=${_SERVICE}=${_REGION}-docker.pkg.dev/$PROJECT_ID/banshee/banshee:$BUILD_ID'
+      - '--images=${_SERVICE}=${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
 
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/banshee/banshee:$BUILD_ID'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
 
 options:
   logging: CLOUD_LOGGING_ONLY

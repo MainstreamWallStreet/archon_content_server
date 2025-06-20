@@ -1,4 +1,4 @@
-# Banshee Deployment Debug Log
+# Zergling Deployment Debug Log
 
 ## Issue: Cloud Deploy Release Failure
 **Date:** January 2025  
@@ -10,7 +10,7 @@
 ### Step 1: Initial Assessment
 - Cloud Deploy pipeline is failing during the render phase
 - Need to test local deployment to Artifact Registry first
-- Then verify Cloud Run deployment works with Banshee-specific configs
+- Then verify Cloud Run deployment works with Zergling-specific configs
 
 ### Step 2: Local Testing Plan
 1. Build container locally
@@ -23,16 +23,16 @@
 
 #### 3.1 Check Current GCP Configuration
 ✅ **Result:** Project: mainstreamwallstreet, Region: us-central1  
-✅ **Result:** Banshee artifact repository exists
+✅ **Result:** Zergling artifact repository exists
 
 #### 3.2 Build and Push Container
 ❌ **Issue 1:** First build created multi-platform manifest that Cloud Run doesn't support  
 ✅ **Solution:** Built with `--platform linux/amd64`  
-✅ **Result:** Successfully pushed `us-central1-docker.pkg.dev/mainstreamwallstreet/banshee/banshee:debug-amd64-1749428531`
+✅ **Result:** Successfully pushed `us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:debug-amd64-1749428531`
 
 #### 3.3 Service Account Configuration
-❌ **Issue 2:** Terraform defines `banshee-cloud-run` but actual SA is `cloud-run-banshee-sa`  
-✅ **Solution:** Used correct service account: `cloud-run-banshee-sa@mainstreamwallstreet.iam.gserviceaccount.com`
+❌ **Issue 2:** Terraform defines `zergling-cloud-run` but actual SA is `cloud-run-zergling-sa`  
+✅ **Solution:** Used correct service account: `cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com`
 
 #### 3.4 Cloud Run Deployment
 ❌ **Issue 3:** Container fails to start with timeout error  
@@ -43,10 +43,10 @@ RuntimeError: Failed to initialize GCS job queue. Please check your GCS configur
 
 #### 3.5 GCS Bucket Configuration
 ❌ **Issue 4:** Missing required GCS bucket
-- Application expects `gs://banshee-data/` for:
-  - Earnings queue: `gs://banshee-data/earnings_queue/`
-  - API call logs: `gs://banshee-data/api_calls/`
-- Only existing Banshee bucket is `gs://banshee-tf-state-202407/` (for Terraform state)
+- Application expects `gs://zergling-data/` for:
+  - Data queue: `gs://zergling-data/queue/`
+  - API call logs: `gs://zergling-data/api_calls/`
+- Only existing Zergling bucket is `gs://zergling-tf-state-202407/` (for Terraform state)
 ✅ **Solution:** Created bucket subdirectories and granted storage admin permissions
 
 #### 3.6 Application Code Fixes
@@ -55,7 +55,7 @@ RuntimeError: Failed to initialize GCS job queue. Please check your GCS configur
 ✅ **Result:** Application now starts successfully without Google Drive requirements
 
 #### 3.7 Final Testing
-✅ **Build Success:** New image `us-central1-docker.pkg.dev/mainstreamwallstreet/banshee/banshee:no-gdrive-1749429654`
+✅ **Build Success:** New image `us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:no-gdrive-1749429654`
 ✅ **Deploy Success:** Cloud Run deployment completed successfully
 ✅ **Health Check:** API responds with `{"status":"healthy"}`
 ✅ **Application Logs:** Shows successful startup:
@@ -75,20 +75,20 @@ INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
 
 ### 2. Service Account Naming Mismatch
 - Terraform config vs actual deployed SAs have different naming patterns
-- Terraform: `banshee-cloud-run`
-- Actual: `cloud-run-banshee-sa`
+- Terraform: `zergling-cloud-run`
+- Actual: `cloud-run-zergling-sa`
 - **Action Required:** Update either Terraform or Cloud Deploy configs for consistency
 
 ### 3. Application Configuration Issues
 - App crashed during startup trying to initialize GCS job queue
 - Missing environment variables or credentials
-- **Fix:** Set `JOB_QUEUE_BUCKET=banshee-data` and granted storage.admin permissions
+- **Fix:** Set `JOB_QUEUE_BUCKET=zergling-data` and granted storage.admin permissions
 
 ### 4. Missing GCS Resources
-- Required bucket `banshee-data` didn't exist
+- Required bucket `zergling-data` didn't exist
 - **Fix:** Created bucket and granted permissions to Cloud Run service account
 - Bucket structure created:
-  - `earnings_queue/` for call schedules
+  - `queue/` for call schedules
   - `api_calls/` for API Ninjas request logs
 
 ### 5. Unnecessary Google Drive Dependencies
@@ -102,7 +102,7 @@ INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
 - **Manual Deployment:** Successfully deployed to Cloud Run
 - **Health Check:** API endpoint responds correctly
 - **GCS Integration:** Job queue initializes without errors
-- **Service URL:** https://banshee-api-455624753981.us-central1.run.app
+- **Service URL:** https://zergling-api-455624753981.us-central1.run.app
 
 ### ❌ **Cloud Deploy Pipeline Still Failing**
 - Cloud Build completes successfully

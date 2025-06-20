@@ -1,3 +1,3 @@
 """
-Banshee - Notification Engine
+Zergling - FastAPI Server Template
 """

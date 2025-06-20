@@ -3,7 +3,7 @@
 ## Current Issues
 
 ### 1. Cloud Run Service Account Permissions
-- **Issue**: The Cloud Run service account (`cloud-run-banshee-sa`) is missing the `roles/run.invoker` role
+- **Issue**: The Cloud Run service account (`cloud-run-zergling-sa`) is missing the `roles/run.invoker` role
 - **Impact**: This prevents the service account from invoking Cloud Run services
 - **Location**: `infra/main.tf`
 - **Status**: Not yet fixed
@@ -36,8 +36,8 @@
 ## Infrastructure Components
 
 ### Service Accounts
-- `cloud-run-banshee-sa`: Main service account for Cloud Run
-- `deploy-banshee-sa`: Service account for deployment operations
+- `cloud-run-zergling-sa`: Main service account for Cloud Run
+- `deploy-zergling-sa`: Service account for deployment operations
 
 ### Key Resources
 - Artifact Registry repository

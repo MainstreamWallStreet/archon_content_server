@@ -1,62 +1,33 @@
-# Banshee Server
+# Zergling FastAPI Server Template
 
-Banshee is a FastAPI-based backend for managing stock watchlists, earnings alerts, and notifications. It integrates with Google Cloud Storage, SendGrid, and external APIs to provide robust alerting and data synchronization for financial events.
+A production-ready FastAPI server template with GCP integration, API key auth, GCS-based storage, background scheduler, and CI/CD. All legacy and business-specific code has been removed.
 
 ## Features
 
-- **Watchlist Management**: Add, remove, and list stock tickers.
-- **Earnings Alerts**: Track upcoming earnings calls and send notifications.
-- **Global and User Alerts**: Send system-wide or user-specific email notifications.
-- **Google Cloud Integration**: Uses GCS for persistent storage of watchlists and call queues.
-- **SendGrid Integration**: Email notifications for alerts and system events.
-- **API Key and Basic Auth Security**: Protects endpoints with API keys and/or basic authentication.
-- **Automated Data Sync**: Scheduled tasks for syncing earnings data and sending queued emails.
-- **Self-Contained Background Scheduler**: All periodic jobs run inside the server—no external cron or cloud scheduler needed.
-- **Comprehensive Test Suite**: Includes robust async and endpoint tests.
-- **Reliable Cleanup on Ticker Deletion**: Deleting a ticker now reliably removes all related earnings calls and queued emails for that ticker, with robust regression tests to ensure correctness.
-- **Deduplication and Manual Cleanup**: Includes scripts and endpoints to deduplicate and manually clean up the email/call queues for maintenance.
-
-## Background Scheduler: How Banshee Automates Everything
-
-Banshee includes a built-in, self-contained background scheduler that automates all periodic operations. This means you do **not** need to set up any external cron jobs, Google Cloud Scheduler, or other automation tools. If the server is running, your jobs are running.
-
-### What the Scheduler Does
-
-- **Daily Sync (00:00 UTC / 19:00 EST)**
-  - Refreshes upcoming earnings calls for all tickers
-  - Queues reminder emails (1 week, 1 day, and 1 hour before each call)
-  - Cleans up old/past data
-- **Hourly Email Dispatch**
-  - Scans the email queue for any emails due in the next hour
-  - Sends those emails and removes them from the queue
-- **Manual Triggers**
-  - You can still trigger these operations manually via `/tasks/daily-sync`, `/tasks/upcoming-sync`, and `/tasks/send-queued-emails` endpoints
-
-### How It Works
-
-- The scheduler is started automatically when the FastAPI app starts, and stopped when the app shuts down.
-- Uses Python's `asyncio` for non-blocking background tasks.
-- All logic is covered by tests, and you can manually trigger syncs via API endpoints.
-- No external dependencies: works the same in local dev, staging, or production.
-
-### Why This Design?
-
-- **Self-contained**: No ops or cloud setup required.
-- **Portable**: Works anywhere you run the server.
-- **Reliable**: If the server is running, your periodic jobs are running.
+- **FastAPI Framework**: Modern, fast web framework with automatic API documentation
+- **Google Cloud Integration**: GCS for storage, Secret Manager for secrets, Cloud Run for deployment
+- **Authentication**: API key-based authentication with configurable security
+- **Data Storage**: Generic GCS-based data store with JSON persistence
+- **Background Tasks**: Built-in scheduler for periodic operations
+- **Comprehensive Testing**: Full test suite with async support and mocking
+- **CI/CD Pipeline**: Automated build and deployment with Cloud Build and Cloud Deploy
+- **Infrastructure as Code**: Terraform configuration for all GCP resources
+- **Development Environment**: Hot reload, Docker support, and development tools
+- **Production Ready**: Logging, error handling, health checks, and monitoring
 
 ## Requirements
 
 - Python 3.11+
-- Google Cloud credentials (for GCS)
-- SendGrid account (for email notifications)
+- Google Cloud Platform account
+- Docker (for containerized deployment)
+- Terraform (for infrastructure management)
 
-## Installation
+## Quick Start
 
-1. **Clone the repository:**
+1. **Clone and customize:**
    ```sh
-   git clone https://github.com/MainstreamWallStreet/banshee-server-rebuild.git
-   cd banshee-server-rebuild
+   git clone <template-repo>
+   cd fastapi-server-template
    ```
 
 2. **Install dependencies:**
@@ -64,115 +35,257 @@ Banshee includes a built-in, self-contained background scheduler that automates 
    pip install -r requirements.txt
    ```
 
-3. **Set up environment variables:**
-   - Copy `sample.env` to `.env` and fill in your secrets and configuration.
-   - Required variables include:
-     - `GOOGLE_CLOUD_PROJECT`
-     - `GOOGLE_SA_VALUE`
-     - `API_NINJAS_KEY`
-     - `RAVEN_API_KEY`
-     - `BANSHEE_API_KEY`
-     - `BANSHEE_DATA_BUCKET`
-     - `EARNINGS_BUCKET`
-     - `EMAIL_QUEUE_BUCKET`
-     - `BANSHEE_WEB_PASSWORD`
-     - `SENDGRID_API_KEY`
-     - `ALERT_FROM_EMAIL`
-     - `ALERT_RECIPIENTS`
-     - `ENV`
+3. **Configure environment:**
+   ```sh
+   cp sample.env .env
+   # Edit .env with your configuration
+   ```
 
-## Running the Server
+4. **Run locally:**
+   ```sh
+   python run.py
+   ```
 
-For local development, use the provided entrypoint:
+5. **Access API:**
+   - API: http://localhost:8080
+   - Documentation: http://localhost:8080/docs
+   - Health Check: http://localhost:8080/health
 
-```sh
-python run_banshee.py
-```
+## Configuration
 
-This will start the FastAPI server on `http://0.0.0.0:8080` with hot reload and detailed logging.
+### Environment Variables
 
-## API Overview
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `APP_NAME` | Application name | Yes |
+| `API_KEY` | API authentication key | Yes |
+| `GOOGLE_CLOUD_PROJECT` | GCP project ID | Yes |
+| `GOOGLE_SA_VALUE` | Service account JSON | Yes |
+| `STORAGE_BUCKET` | GCS bucket for data | Yes |
+| `ENV` | Environment (dev/staging/prod) | Yes |
+
+### GCP Setup
+
+1. **Create a GCP project**
+2. **Enable required APIs:**
+   - Cloud Run API
+   - Cloud Build API
+   - Cloud Deploy API
+   - Secret Manager API
+   - Storage API
+   - Artifact Registry API
+
+3. **Create service accounts:**
+   - Cloud Run service account
+   - Deployment service account
+
+4. **Set up Workload Identity** (for GitHub Actions)
+
+## API Endpoints
 
 ### Authentication
+All endpoints require an `X-API-Key` header with your configured API key.
 
-- Most endpoints require an `X-API-Key` header with the value set to your `BANSHEE_API_KEY`.
-- The `/web` UI endpoint uses HTTP Basic Auth with the password from `BANSHEE_WEB_PASSWORD`.
+### Core Endpoints
 
-### Endpoints
+- `GET /` - Health check
+- `GET /health` - Detailed health status
+- `GET /docs` - Interactive API documentation
+- `GET /items` - List all items
+- `POST /items` - Create new item
+- `GET /items/{item_id}` - Get specific item
+- `PUT /items/{item_id}` - Update item
+- `DELETE /items/{item_id}` - Delete item
 
-- `GET /`  
-  Health check. Returns API status.
+### Admin Endpoints
 
-- `GET /watchlist`  
-  List all tickers in the watchlist.
+- `POST /admin/tasks/run-scheduler` - Trigger background tasks
 
-- `POST /watchlist`  
-  Add a ticker to the watchlist.  
-  **Body:** `{ "ticker": "AAPL", "user": "alice" }`
+## Development
 
-- `DELETE /watchlist/{ticker}`  
-  Remove a ticker from the watchlist and clean up related data. **This now reliably deletes all earnings calls and queued emails for the ticker.**
+### Running Tests
+```sh
+# Run all tests
+pytest
 
-- `GET /earnings/upcoming`  
-  List upcoming earnings calls.
+# Run with coverage
+pytest --cov=src
 
-- `GET /earnings/{ticker}`  
-  Get earnings data for a specific ticker.
+# Run specific test file
+pytest tests/test_api.py
+```
 
-- `POST /send-global-alert`  
-  Send a global alert email to all configured recipients.  
-  **Body:** `{ "subject": "Alert", "message": "Something happened" }`
+### Code Quality
+```sh
+# Type checking
+mypy src/
 
-- `POST /tasks/daily-sync`  
-  Trigger a daily sync of earnings and watchlist data.
+# Linting
+flake8 src/
 
-- `POST /tasks/upcoming-sync`  
-  Trigger a sync of upcoming earnings calls.
+# Formatting
+black src/
+```
 
-- `POST /tasks/send-queued-emails`  
-  Send all queued emails.
+### Local Development
+```sh
+# Start with hot reload
+python run.py
 
-- `POST /test-email`  
-  Send a test email to the configured address.
-
-- `GET /web`  
-  Access the web UI (requires HTTP Basic Auth).
-
-## Email & Alerting
-
-- Uses SendGrid for all email notifications.
-- Alerts can be sent to all admins or individual users.
-- Recipients and sender are configured via environment variables.
-
-## Testing
-
-- Tests are located in the `__tests__` directory.
-- To run all tests:
-  ```sh
-  pytest __tests__/
-  ```
-- Tests cover:
-  - Watchlist API
-  - Notification and alerting logic
-  - Earnings alerts and data sync
-  - GCS job queue logic
+# Start with Docker
+docker build -t fastapi-template .
+docker run -p 8080:8080 fastapi-template
+```
 
 ## Deployment
 
-- See `deploy.md` for details on deploying to Google Cloud Run using Cloud Build and Cloud Deploy.
-- All secrets and environment variables should be managed securely (e.g., via Google Secret Manager).
+### Infrastructure Setup
+```sh
+cd infra
+terraform init
+terraform plan
+terraform apply
+```
+
+### CI/CD Pipeline
+The template includes:
+- **Cloud Build**: Automated Docker image building
+- **Cloud Deploy**: Progressive deployment pipeline
+- **Artifact Registry**: Container image storage
+- **Cloud Run**: Serverless container hosting
+
+### Manual Deployment
+```sh
+# Build and push image
+gcloud builds submit --tag gcr.io/PROJECT_ID/APP_NAME
+
+# Deploy to Cloud Run
+gcloud run deploy APP_NAME --image gcr.io/PROJECT_ID/APP_NAME
+```
+
+## Architecture
+
+### Core Components
+
+- **API Layer**: FastAPI application with route handlers
+- **Data Layer**: GCS-based JSON storage with generic interface
+- **Scheduler**: Background task management
+- **Configuration**: Environment and secret management
+
+### Data Flow
+
+1. **Request** → API endpoint with authentication
+2. **Validation** → Pydantic models and business logic
+3. **Storage** → GCS bucket operations
+4. **Response** → JSON response with proper status codes
+
+### Background Tasks
+
+- **Scheduler**: Runs periodic operations
+- **Job Queue**: Manages async task processing
+
+## Customization
+
+### Adding New Endpoints
+
+1. Define Pydantic models in `src/models.py`
+2. Add route handlers in `src/api.py`
+3. Write tests in `tests/test_api.py`
+4. Update API documentation
+
+### Adding New Data Types
+
+1. Extend the base data store interface
+2. Implement GCS storage methods
+3. Add validation and business logic
+4. Write comprehensive tests
+
+### Adding External Integrations
+
+1. Create integration module in `src/`
+2. Add configuration variables
+3. Implement error handling
+4. Write integration tests
+
+## Monitoring and Logging
+
+### Health Checks
+- Application health: `/health`
+- Database connectivity
+- External service status
+
+### Logging
+- Structured JSON logging
+- Request/response logging
+- Error tracking
+- Performance metrics
+
+### Metrics
+- Request counts and latencies
+- Error rates
+- Background task performance
+- Storage operations
+
+## Security
+
+### Authentication
+- API key-based authentication
+- Configurable key rotation
+- Rate limiting support
+
+### Data Protection
+- Encrypted storage in GCS
+- Secret management via Secret Manager
+- HTTPS-only communication
+
+### Access Control
+- Service account permissions
+- IAM role-based access
+- Network security policies
+
+## Troubleshooting
+
+### Common Issues
+
+1. **GCS Permission Errors**
+   - Verify service account permissions
+   - Check bucket access policies
+
+2. **Secret Manager Access**
+   - Ensure service account has Secret Manager access
+   - Verify secret names and versions
+
+3. **Cloud Run Deployment**
+   - Check container image build
+   - Verify environment variables
+   - Review Cloud Run logs
+
+### Debug Mode
+```sh
+# Enable debug logging
+export LOG_LEVEL=DEBUG
+python run.py
+```
 
 ## Contributing
 
-Pull requests and issues are welcome! Please ensure all tests pass before submitting changes.
+1. Fork the template
+2. Create a feature branch
+3. Write tests for new functionality
+4. Ensure all tests pass
+5. Submit a pull request
 
-## Maintenance & Cleanup
+## License
 
-- The system includes endpoints and scripts for deduplicating the email queue and cleaning up all calls/emails for a ticker.
-- These tools can be used for manual maintenance or in response to operational needs.
+This template is provided as-is for educational and commercial use.
 
 ---
 
-**Main Authors:**  
-- Griffin Clark  
-- Mainstream Wall Street Team 
+**Template Features:**
+- Production-ready FastAPI server
+- Google Cloud Platform integration
+- Comprehensive testing suite
+- Automated CI/CD pipeline
+- Infrastructure as Code
+- Security best practices
+- Scalable architecture 

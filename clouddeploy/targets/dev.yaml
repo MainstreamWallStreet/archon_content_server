@@ -2,10 +2,10 @@ apiVersion: deploy.cloud.google.com/v1
 kind: Target
 metadata:
   name: dev
-description: Deploy Banshee API to Cloud Run (dev)
+description: Deploy Zergling API to Cloud Run (dev)
 run:
   location: projects/mainstreamwallstreet/locations/us-central1
 executionConfigs:
 - usages: [RENDER, DEPLOY]
-  serviceAccount: deploy-banshee-sa@mainstreamwallstreet.iam.gserviceaccount.com
+  serviceAccount: deploy-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com
   artifactStorage: gs://us-central1.deploy-artifacts.mainstreamwallstreet.appspot.com
