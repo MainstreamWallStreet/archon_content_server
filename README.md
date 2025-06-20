@@ -361,96 +361,43 @@ gcloud run deploy zergling-api \
 ### Adding New Data Types
 
 1. Extend the base data store interface
-2. Implement GCS storage methods
-3. Add validation and business logic
+2. Implement storage methods
+3. Add validation models
 4. Write comprehensive tests
 
-### Adding External Integrations
+### Infrastructure Customization
 
-1. Create integration module in `src/`
-2. Add configuration variables
-3. Implement error handling
-4. Write integration tests
+1. Modify `infra/terraform.tfvars`
+2. Update resource names and configurations
+3. Add new GCP services as needed
+4. Test infrastructure changes
 
-## Monitoring and Logging
+## Documentation
 
-### Health Checks
-- Application health: `/health`
-- Database connectivity
-- External service status
+- **[AGENTS.md](AGENTS.md)**: Guide for AI agents working with this codebase
+- **[docs/ci-cd.md](docs/ci-cd.md)**: CI/CD pipeline documentation
+- **[docs/infra/README.md](docs/infra/README.md)**: Infrastructure documentation
+- **[docs/infra/quick-reference.md](docs/infra/quick-reference.md)**: Quick reference guide
 
-### Logging
-- Structured JSON logging
-- Request/response logging
-- Error tracking
-- Performance metrics
+## Support
 
-### Metrics
-- Request counts and latencies
-- Error rates
-- Background task performance
-- Storage operations
+For issues with this template:
 
-## Security
-
-### Authentication
-- API key-based authentication
-- Configurable key rotation
-- Rate limiting support
-
-### Data Protection
-- Encrypted storage in GCS
-- Secret management via Secret Manager
-- HTTPS-only communication
-
-### Access Control
-- Service account permissions
-- IAM role-based access
-- Network security policies
-
-## Troubleshooting
-
-### Common Issues
-
-1. **GCS Permission Errors**
-   - Verify service account permissions
-   - Check bucket access policies
-
-2. **Secret Manager Access**
-   - Ensure service account has Secret Manager access
-   - Verify secret names and versions
-
-3. **Cloud Run Deployment**
-   - Check container image build
-   - Verify environment variables
-   - Review Cloud Run logs
-
-### Debug Mode
-```sh
-# Enable debug logging
-export LOG_LEVEL=DEBUG
-python run.py
-```
+1. Check the [FastAPI documentation](https://fastapi.tiangolo.com/)
+2. Review [Google Cloud documentation](https://cloud.google.com/docs)
+3. Check the application logs for specific error messages
+4. Verify all customizations have been applied correctly
+5. Review the troubleshooting sections in the documentation
 
 ## Contributing
 
-1. Fork the template
+1. Fork the repository
 2. Create a feature branch
-3. Write tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
+3. Make your changes following the coding standards
+4. Add tests for new functionality
+5. Update documentation as needed
+6. Submit a pull request
 
 ## License
 
-This template is provided as-is for educational and commercial use.
-
----
-
-**Template Features:**
-- Production-ready FastAPI server
-- Google Cloud Platform integration
-- Comprehensive testing suite
-- Automated CI/CD pipeline
-- Infrastructure as Code
-- Security best practices
-- Scalable architecture 
+This template is provided as-is for educational and development purposes. 
