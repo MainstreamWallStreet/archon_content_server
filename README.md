@@ -376,6 +376,7 @@ gcloud run deploy zergling-api \
 
 - **[AGENTS.md](AGENTS.md)**: Guide for AI agents working with this codebase
 - **[docs/ci-cd.md](docs/ci-cd.md)**: CI/CD pipeline documentation
+- **[docs/pipeline-setup.md](docs/pipeline-setup.md)**: A step-by-step guide for configuring the CI/CD pipeline
 - **[docs/infra/README.md](docs/infra/README.md)**: Infrastructure documentation
 - **[docs/infra/quick-reference.md](docs/infra/quick-reference.md)**: Quick reference guide
 
