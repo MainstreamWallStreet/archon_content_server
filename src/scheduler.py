@@ -4,7 +4,7 @@ Background task scheduler for FastAPI template.
 
 import asyncio
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 

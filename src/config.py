@@ -22,9 +22,8 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-from google.cloud import secretmanager  # type: ignore
 from dotenv import load_dotenv  # pip install python-dotenv
-
+from google.cloud import secretmanager  # type: ignore
 
 # ────────────────────────────────
 # 🔐  Load .env (mounted or local)

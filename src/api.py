@@ -2,30 +2,22 @@
 Main FastAPI application for the template.
 """
 
+import base64
 import logging
 import secrets
 from datetime import datetime, timezone
-import base64
 
 from fastapi import Depends, FastAPI, HTTPException, Security
-from fastapi.security import APIKeyHeader
 from fastapi.responses import JSONResponse
+from fastapi.security import APIKeyHeader
 
 from src.config import get_setting
 from src.database import DataStore
 from src.gcs_store import GcsStore
-from src.models import (
-    Item,
-    ItemCreate,
-    ItemUpdate,
-    ItemsResponse,
-    HealthResponse,
-    SchedulerResponse,
-    ObjectListResponse,
-    ObjectUploadRequest,
-    ObjectDownloadResponse,
-)
-from src.scheduler import get_scheduler, BackgroundScheduler
+from src.models import (HealthResponse, Item, ItemCreate, ItemsResponse,
+                        ItemUpdate, ObjectDownloadResponse, ObjectListResponse,
+                        ObjectUploadRequest, SchedulerResponse)
+from src.scheduler import BackgroundScheduler, get_scheduler
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

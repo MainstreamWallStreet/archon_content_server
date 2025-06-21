@@ -3,12 +3,12 @@ Tests for data store interface and implementations.
 """
 
 import json
-from unittest.mock import MagicMock, patch, mock_open
+import os
 from typing import List
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 from google.cloud.exceptions import GoogleCloudError
-import os
 
 from src.database import DataStore
 from src.gcs_store import GcsStore

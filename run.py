@@ -4,6 +4,7 @@ Main entry point for FastAPI Server Template.
 """
 
 import os
+
 import uvicorn
 from dotenv import load_dotenv
 
