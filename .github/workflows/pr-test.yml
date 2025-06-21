@@ -3,6 +3,8 @@ name: PR Test
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+  push:
+    branches: [main, feature/cloud-deploy-pipeline]
 
 jobs:
   test:
@@ -35,7 +37,7 @@ jobs:
           pip install pre-commit
         working-directory: ${{ github.workspace }}
 
-      - name: Run pre-commit checks (Black, isort, flake8)
+      - name: Run pre-commit checks (Black, flake8)
         run: pre-commit run --all-files
         working-directory: ${{ github.workspace }}
 
