@@ -33,6 +33,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           
+      - name: Auto-format code with Black
+        run: |
+          pip install black
+          black src/ tests/
+
       - name: Auto-format imports with isort
         run: |
           pip install isort
