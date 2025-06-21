@@ -10,27 +10,27 @@ from src.models import Item, ItemCreate, ItemUpdate
 
 class DataStore(ABC):
     """Abstract interface for data storage."""
-    
+
     @abstractmethod
     def list_items(self) -> List[Item]:
         """List all items."""
         pass
-    
+
     @abstractmethod
     def get_item(self, item_id: str) -> Optional[Item]:
         """Get a specific item by ID."""
         pass
-    
+
     @abstractmethod
     def create_item(self, item: ItemCreate) -> Item:
         """Create a new item."""
         pass
-    
+
     @abstractmethod
     def update_item(self, item_id: str, item: ItemUpdate) -> Item:
         """Update an existing item."""
         pass
-    
+
     @abstractmethod
     def delete_item(self, item_id: str) -> None:
         """Delete an item."""
@@ -56,6 +56,7 @@ class GcsStore(DataStore):
     """
     Google Cloud Storage implementation for example_bucket.
     """
+
     def __init__(self, bucket_name: str):
         self.bucket_name = bucket_name
-        # ... existing code ... 
+        # ... existing code ...

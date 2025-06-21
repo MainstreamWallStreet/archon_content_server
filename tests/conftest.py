@@ -41,7 +41,7 @@ def mock_gcs_client() -> MagicMock:
         mock_bucket = MagicMock()
         mock_bucket.exists.return_value = True
         mock_client.return_value.bucket.return_value = mock_bucket
-        
+
         yield mock_client
 
 
@@ -59,26 +59,20 @@ def sample_item() -> Item:
         name="Test Item",
         description="A test item",
         created_at="2024-01-01T00:00:00Z",
-        updated_at="2024-01-01T00:00:00Z"
+        updated_at="2024-01-01T00:00:00Z",
     )
 
 
 @pytest.fixture
 def sample_item_create() -> ItemCreate:
     """Create a sample item creation request for testing."""
-    return ItemCreate(
-        name="New Test Item",
-        description="A new test item"
-    )
+    return ItemCreate(name="New Test Item", description="A new test item")
 
 
 @pytest.fixture
 def sample_item_update() -> ItemUpdate:
     """Create a sample item update request for testing."""
-    return ItemUpdate(
-        name="Updated Test Item",
-        description="An updated test item"
-    )
+    return ItemUpdate(name="Updated Test Item", description="An updated test item")
 
 
 @pytest.fixture
@@ -88,7 +82,7 @@ def mock_secret_manager() -> MagicMock:
         mock_response = MagicMock()
         mock_response.payload.data.decode.return_value = "test-secret"
         mock_client.return_value.access_secret_version.return_value = mock_response
-        
+
         yield mock_client
 
 
@@ -116,10 +110,13 @@ def invalid_api_key_header() -> dict:
 @pytest.fixture(autouse=True)
 def test_env():
     """Set up test environment variables."""
-    with patch.dict(os.environ, {
-        "ZERGLING_API_KEY": "test-api-key",
-        "EXAMPLE_BUCKET": "test-bucket",
-    }):
+    with patch.dict(
+        os.environ,
+        {
+            "ZERGLING_API_KEY": "test-api-key",
+            "EXAMPLE_BUCKET": "test-bucket",
+        },
+    ):
         yield
 
 
@@ -133,15 +130,15 @@ def mock_gcs_bucket_data() -> dict:
                 "name": "Test Item 1",
                 "description": "First test item",
                 "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z"
+                "updated_at": "2024-01-01T00:00:00Z",
             },
             {
-                "id": "item-2", 
+                "id": "item-2",
                 "name": "Test Item 2",
                 "description": "Second test item",
                 "created_at": "2024-01-02T00:00:00Z",
-                "updated_at": "2024-01-02T00:00:00Z"
-            }
+                "updated_at": "2024-01-02T00:00:00Z",
+            },
         ]
     }
 
@@ -169,4 +166,4 @@ def mock_storage_client(mock_gcs_bucket: MagicMock) -> MagicMock:
     """Mock storage client for testing."""
     mock_client = MagicMock()
     mock_client.bucket.return_value = mock_gcs_bucket
-    return mock_client 
+    return mock_client

@@ -15,9 +15,15 @@ from src.config import get_setting
 from src.database import DataStore
 from src.gcs_store import GcsStore
 from src.models import (
-    Item, ItemCreate, ItemUpdate, ItemsResponse, 
-    HealthResponse, SchedulerResponse,
-    ObjectListResponse, ObjectUploadRequest, ObjectDownloadResponse
+    Item,
+    ItemCreate,
+    ItemUpdate,
+    ItemsResponse,
+    HealthResponse,
+    SchedulerResponse,
+    ObjectListResponse,
+    ObjectUploadRequest,
+    ObjectDownloadResponse,
 )
 from src.scheduler import get_scheduler, BackgroundScheduler
 
@@ -40,11 +46,12 @@ async def lifespan(app: FastAPI):
     await scheduler_instance.stop()
     logger.info("Application shutdown complete")
 
+
 app = FastAPI(
     title="Zergling FastAPI Server",
     description="A production-ready FastAPI server template with GCP integration",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # Initialize data store
@@ -89,7 +96,7 @@ def root(_: str = Depends(validate_api_key)):
     return {
         "status": "ok",
         "message": "Zergling FastAPI Server is running",
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -99,7 +106,7 @@ def health_check():
     return HealthResponse(
         status="healthy",
         timestamp=datetime.now(timezone.utc).isoformat(),
-        version="1.0.0"
+        version="1.0.0",
     )
 
 
@@ -109,11 +116,8 @@ async def list_items(_: str = Depends(validate_api_key)):
     try:
         store = get_data_store()
         items = store.list_items()
-        
-        return ItemsResponse(
-            items=items,
-            total=len(items)
-        )
+
+        return ItemsResponse(items=items, total=len(items))
     except Exception as e:
         logger.error(f"Error listing items: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -125,10 +129,10 @@ async def get_item(item_id: str, _: str = Depends(validate_api_key)):
     try:
         store = get_data_store()
         item = store.get_item(item_id)
-        
+
         if item is None:
             raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
-        
+
         return item
     except HTTPException:
         raise
@@ -143,7 +147,7 @@ async def create_item(item: ItemCreate, _: str = Depends(validate_api_key)):
     try:
         store = get_data_store()
         created_item = store.create_item(item)
-        
+
         logger.info(f"Created item: {created_item.id}")
         return created_item
     except ValueError as e:
@@ -155,15 +159,13 @@ async def create_item(item: ItemCreate, _: str = Depends(validate_api_key)):
 
 @app.put("/items/{item_id}", response_model=Item)
 async def update_item(
-    item_id: str, 
-    item_update: ItemUpdate, 
-    _: str = Depends(validate_api_key)
+    item_id: str, item_update: ItemUpdate, _: str = Depends(validate_api_key)
 ):
     """Update an existing item."""
     try:
         store = get_data_store()
         updated_item = store.update_item(item_id, item_update)
-        
+
         logger.info(f"Updated item: {item_id}")
         return updated_item
     except ValueError as e:
@@ -179,7 +181,7 @@ async def delete_item(item_id: str, _: str = Depends(validate_api_key)):
     try:
         store = get_data_store()
         store.delete_item(item_id)
-        
+
         logger.info(f"Deleted item: {item_id}")
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -194,17 +196,22 @@ async def run_scheduler(_: str = Depends(validate_api_key)):
     try:
         scheduler_instance = get_scheduler_instance()
         result = await scheduler_instance.run_tasks()
-        
+
         return SchedulerResponse(
-            message="Background tasks completed",
-            tasks_run=result["tasks_run"]
+            message="Background tasks completed", tasks_run=result["tasks_run"]
         )
     except Exception as e:
         logger.error(f"Error running scheduler: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/objects", response_model=ObjectListResponse, tags=["Objects"], summary="List all objects in the example_bucket", description="Returns a list of all object names stored in the example_bucket.")
+@app.get(
+    "/objects",
+    response_model=ObjectListResponse,
+    tags=["Objects"],
+    summary="List all objects in the example_bucket",
+    description="Returns a list of all object names stored in the example_bucket.",
+)
 async def list_objects(_: str = Depends(validate_api_key)):
     """
     List all objects in the example_bucket.
@@ -214,7 +221,13 @@ async def list_objects(_: str = Depends(validate_api_key)):
     return ObjectListResponse(objects=objects)
 
 
-@app.get("/objects/{object_name}", response_model=ObjectDownloadResponse, tags=["Objects"], summary="Download an object from the example_bucket", description="Download the specified object as base64-encoded data.")
+@app.get(
+    "/objects/{object_name}",
+    response_model=ObjectDownloadResponse,
+    tags=["Objects"],
+    summary="Download an object from the example_bucket",
+    description="Download the specified object as base64-encoded data.",
+)
 async def download_object(object_name: str, _: str = Depends(validate_api_key)):
     """
     Download an object from the example_bucket.
@@ -228,8 +241,16 @@ async def download_object(object_name: str, _: str = Depends(validate_api_key)):
     return ObjectDownloadResponse(object_name=object_name, data=encoded)
 
 
-@app.post("/objects", status_code=201, tags=["Objects"], summary="Upload a new object to the example_bucket", description="Upload a new object with the given name and base64-encoded data. Fails if the object already exists.")
-async def upload_object(request: ObjectUploadRequest, _: str = Depends(validate_api_key)):
+@app.post(
+    "/objects",
+    status_code=201,
+    tags=["Objects"],
+    summary="Upload a new object to the example_bucket",
+    description="Upload a new object with the given name and base64-encoded data. Fails if the object already exists.",
+)
+async def upload_object(
+    request: ObjectUploadRequest, _: str = Depends(validate_api_key)
+):
     """
     Upload a new object to the example_bucket.
     """
@@ -242,8 +263,15 @@ async def upload_object(request: ObjectUploadRequest, _: str = Depends(validate_
     return {"message": f"Object {request.object_name} uploaded successfully."}
 
 
-@app.put("/objects/{object_name}", tags=["Objects"], summary="Update an existing object in the example_bucket", description="Update (overwrite) the specified object with new base64-encoded data. Fails if the object does not exist.")
-async def update_object(object_name: str, request: ObjectUploadRequest, _: str = Depends(validate_api_key)):
+@app.put(
+    "/objects/{object_name}",
+    tags=["Objects"],
+    summary="Update an existing object in the example_bucket",
+    description="Update (overwrite) the specified object with new base64-encoded data. Fails if the object does not exist.",
+)
+async def update_object(
+    object_name: str, request: ObjectUploadRequest, _: str = Depends(validate_api_key)
+):
     """
     Update (overwrite) an existing object in the example_bucket.
     """
@@ -256,7 +284,12 @@ async def update_object(object_name: str, request: ObjectUploadRequest, _: str =
     return {"message": f"Object {object_name} updated successfully."}
 
 
-@app.delete("/objects/{object_name}", tags=["Objects"], summary="Delete an object from the example_bucket", description="Delete the specified object from the example_bucket.")
+@app.delete(
+    "/objects/{object_name}",
+    tags=["Objects"],
+    summary="Delete an object from the example_bucket",
+    description="Delete the specified object from the example_bucket.",
+)
 async def delete_object(object_name: str, _: str = Depends(validate_api_key)):
     """
     Delete an object from the example_bucket.
@@ -286,4 +319,6 @@ async def internal_error_handler(request, exc):
 @app.exception_handler(422)
 async def validation_error_handler(request, exc):
     """Handle validation errors."""
-    return JSONResponse(status_code=422, content={"detail": "Validation error", "errors": exc.errors()}) 
+    return JSONResponse(
+        status_code=422, content={"detail": "Validation error", "errors": exc.errors()}
+    )
