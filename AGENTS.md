@@ -33,6 +33,20 @@ This Agents.md file provides comprehensive guidance for AI agents working with t
   - `/pr-test.yml`: Pull request testing workflow
   - `/deploy.yml`: Deployment workflow
 
+## Documentation Structure for AI Agents
+
+This project uses a structured approach to documentation to ensure that both humans and AI agents can find the information they need. As an AI agent, refer to this structure to understand where to look for information and where to contribute new documentation.
+
+-   **`README.md`**: The main entry point for human developers. It contains a high-level overview, setup instructions, and quick-start guides. *Agents should update this file only when making changes that affect the developer setup or user-facing features.*
+
+-   **`AGENTS.md`** (This file): The primary guide for AI agents. It contains detailed instructions, coding conventions, testing requirements, and security guidelines that agents must follow. *Agents should refer to this file as their main source of truth for how to operate within the repository.*
+
+-   **`docs/`**: This directory contains all detailed, long-form documentation.
+    -   **`docs/pipeline-setup.md`**: A step-by-step guide for human developers on how to configure the CI/CD pipeline, including setting up GitHub secrets and branch protection rules. *Agents can reference this to understand the deployment prerequisites.*
+    -   **`docs/ci-cd.md`**: A detailed explanation of the CI/CD pipeline's architecture and workflows. *Agents should use this to understand how code gets from a pull request to production.*
+    -   **`docs/infra/README.md`**: In-depth documentation of the Terraform infrastructure, explaining each component's purpose and configuration. *Agents should consult this before making any changes to the `infra/` directory.*
+    -   **`docs/infra/quick-reference.md`**: A quick-reference guide with common commands for managing the GCP infrastructure. *Agents can use this for operational tasks like checking service status or viewing logs.*
+
 ## Coding Conventions for AI Agents
 
 ### General Conventions for Agents.md Implementation
