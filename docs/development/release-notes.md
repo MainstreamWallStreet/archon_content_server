@@ -1,5 +1,7 @@
 # Release Notes
 
+> **Note:** The project version is always sourced from the `[project]` section in `pyproject.toml`. All requests, documentation, and release notes should reference this version for traceability between code and documentation.
+
 This file contains the official release history for the Zergling FastAPI Server Template. All version changes are managed automatically by AI agents according to the rules in AGENTS.md.
 
 ---
