@@ -15,6 +15,54 @@ A production-ready FastAPI server template with GCP integration, API key auth, G
 - **Development Environment**: Hot reload, Docker support, and development tools
 - **Production Ready**: Logging, error handling, health checks, and monitoring
 
+## Project Structure
+
+```
+fastapi_server_template/
+├── src/                    # Application source code
+│   ├── api.py             # FastAPI application and routes
+│   ├── config.py          # Configuration management
+│   ├── database.py        # GCS-based data store
+│   ├── gcs_store.py       # Google Cloud Storage utilities
+│   ├── models.py          # Pydantic data models
+│   └── scheduler.py       # Background task scheduler
+├── tests/                 # Test suite
+│   ├── conftest.py        # Pytest configuration and fixtures
+│   ├── test_api.py        # API endpoint tests
+│   ├── test_config.py     # Configuration tests
+│   ├── test_database.py   # Database tests
+│   └── test_models.py     # Model tests
+├── infra/                 # Infrastructure as Code
+│   ├── main.tf           # Main Terraform configuration
+│   ├── variables.tf      # Terraform variables
+│   ├── outputs.tf        # Terraform outputs
+│   └── backend.tf        # Terraform backend configuration
+├── docs/                  # Documentation
+│   ├── deployment/       # Deployment guides and troubleshooting
+│   │   ├── deploy.md     # Deployment instructions
+│   │   └── deployment_errors.md # Common deployment issues
+│   ├── development/      # Development guides
+│   │   ├── ci-cd.md      # CI/CD pipeline documentation
+│   │   ├── pipeline-setup.md # Pipeline setup guide
+│   │   ├── pre-commit-setup.md # Pre-commit hooks setup
+│   │   └── release-notes.md # Release management guide
+│   └── infrastructure/   # Infrastructure documentation
+│       ├── configuration_checklist.md # Setup checklist
+│       ├── debug-log.md  # Infrastructure debugging
+│       └── README.md     # Infrastructure overview
+├── scripts/              # Utility scripts
+│   ├── setup_local_dev.sh # Local development setup
+│   ├── setup_zergling.sh  # Zergling-specific setup
+│   ├── test_api.sh        # API testing script
+│   └── test_deployment.sh # Deployment testing
+├── .github/              # GitHub Actions workflows
+├── requirements.txt      # Python dependencies
+├── pyproject.toml        # Project configuration
+├── Dockerfile           # Container configuration
+├── run.py               # Application entry point
+└── README.md            # This file
+```
+
 ## Requirements
 
 - Python 3.11+
@@ -42,14 +90,31 @@ A production-ready FastAPI server template with GCP integration, API key auth, G
    ```
 
 4. **Run locally:**
-```sh
+   ```sh
    python run.py
-```
+   ```
 
 5. **Access API:**
    - API: http://localhost:8080
    - Documentation: http://localhost:8080/docs
    - Health Check: http://localhost:8080/health
+
+## Documentation
+
+### 📚 [Development Guides](docs/development/)
+- [CI/CD Pipeline Setup](docs/development/ci-cd.md)
+- [Pipeline Configuration](docs/development/pipeline-setup.md)
+- [Pre-commit Hooks](docs/development/pre-commit-setup.md)
+- [Release Management](docs/development/release-notes.md)
+
+### 🚀 [Deployment Guides](docs/deployment/)
+- [Deployment Instructions](docs/deployment/deploy.md)
+- [Troubleshooting](docs/deployment/deployment_errors.md)
+
+### 🏗️ [Infrastructure Documentation](docs/infrastructure/)
+- [Configuration Checklist](docs/infrastructure/configuration_checklist.md)
+- [Debugging Guide](docs/infrastructure/debug-log.md)
+- [Infrastructure Overview](docs/infrastructure/README.md)
 
 ## Local Development Setup
 
@@ -199,7 +264,6 @@ You must configure these secrets in your GitHub repository settings (`Settings` 
 cd infra
 terraform output workload_identity_provider
 ```
-**Example**: `projects/123456789/locations/global/workloadIdentityPools/zergling-github-pool-v3/providers/zergling-github-provider`
 
 #### 2. `CLOUD_RUN_SERVICE_ACCOUNT`
 **Description**: The service account email that GitHub Actions will impersonate
@@ -470,6 +534,7 @@ gcloud run deploy zergling-api \
 - **[docs/pipeline-setup.md](docs/pipeline-setup.md)**: A step-by-step guide for configuring the CI/CD pipeline
 - **[docs/infra/README.md](docs/infra/README.md)**: Infrastructure documentation
 - **[docs/infra/quick-reference.md](docs/infra/quick-reference.md)**: Quick reference guide
+- **[docs/release-notes.md](docs/release-notes.md)**: Release notes
 
 ## Support
 

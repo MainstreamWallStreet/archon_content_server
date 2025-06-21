@@ -34,6 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Resolved deployment issues by eliminating Cloud Deploy Skaffold version incompatibilities
 - Improved deployment speed and reliability with direct Cloud Run deployment
+- Fixed repository name mismatch in Terraform configuration (MainstreamWallStreet/zergling-server-template → griffinclark/zergling_fastapi_server_template)
+- Cleaned up unused Cloud Deploy resources and legacy infrastructure components
+- Removed unused GCS buckets (earnings_bucket, email_queue) and secret manager secrets
+- Simplified Terraform configuration to match actual deployment method
+- Verified Workload Identity Federation configuration is correct for actual repository
+- Confirmed all service account permissions are properly configured
+- Updated deployment errors documentation to reflect resolved status
+- Verified and ensured the Workload Identity User IAM binding for GitHub Actions is present in Terraform, enabling successful CI/CD pipeline authentication and deployment.
 
 ## [0.1.0] - 2024-01-XX
 

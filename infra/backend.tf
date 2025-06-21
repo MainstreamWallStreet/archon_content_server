@@ -1,6 +1,5 @@
 terraform {
-  backend "gcs" {
-    bucket = "zergling-tf-state-202407"
-    prefix = "terraform/state"
+  backend "local" {
+    path = "terraform.tfstate"
   }
 }

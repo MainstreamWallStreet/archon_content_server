@@ -25,10 +25,20 @@ This Agents.md file provides comprehensive guidance for AI agents working with t
   - `/test_deployment.sh`: Manual deployment testing
   - `/test_api.sh`: API testing script
   - `/setup_zergling.sh`: Initial setup script
-- `/docs`: Documentation files
-  - `/ci-cd.md`: CI/CD pipeline documentation
-  - `/infra/README.md`: Infrastructure documentation
-  - `/infra/quick-reference.md`: Quick reference guide
+- `/docs`: Documentation files (organized by category)
+  - `/README.md`: Documentation index and navigation guide
+  - `/deployment/`: Deployment-related documentation
+    - `/deploy.md`: Deployment instructions
+    - `/deployment_errors.md`: Troubleshooting guide
+  - `/development/`: Development guides
+    - `/ci-cd.md`: CI/CD pipeline documentation
+    - `/pipeline-setup.md`: Pipeline configuration guide
+    - `/pre-commit-setup.md`: Pre-commit hooks setup
+    - `/release-notes.md`: Release management guide
+  - `/infrastructure/`: Infrastructure documentation
+    - `/README.md`: Infrastructure overview
+    - `/configuration_checklist.md`: Setup checklist
+    - `/debug-log.md`: Infrastructure debugging
 - `.github/workflows`: GitHub Actions workflows
   - `/pr-test.yml`: Pull request testing workflow
   - `/deploy.yml`: Deployment workflow
@@ -41,11 +51,20 @@ This project uses a structured approach to documentation to ensure that both hum
 
 -   **`AGENTS.md`** (This file): The primary guide for AI agents. It contains detailed instructions, coding conventions, testing requirements, and security guidelines that agents must follow. *Agents should refer to this file as their main source of truth for how to operate within the repository.*
 
--   **`docs/`**: This directory contains all detailed, long-form documentation.
-    -   **`docs/pipeline-setup.md`**: A step-by-step guide for human developers on how to configure the CI/CD pipeline, including setting up GitHub secrets and branch protection rules. *Agents can reference this to understand the deployment prerequisites.*
-    -   **`docs/ci-cd.md`**: A detailed explanation of the CI/CD pipeline's architecture and workflows. *Agents should use this to understand how code gets from a pull request to production.*
-    -   **`docs/infra/README.md`**: In-depth documentation of the Terraform infrastructure, explaining each component's purpose and configuration. *Agents should consult this before making any changes to the `infra/` directory.*
-    -   **`docs/infra/quick-reference.md`**: A quick-reference guide with common commands for managing the GCP infrastructure. *Agents can use this for operational tasks like checking service status or viewing logs.*
+-   **`docs/`**: This directory contains all detailed, long-form documentation organized by category:
+    -   **`docs/README.md`**: Documentation index and navigation guide. *Agents should update this when adding new documentation.*
+    -   **`docs/deployment/`**: Deployment and operational documentation
+        -   **`docs/deployment/deploy.md`**: Step-by-step deployment instructions. *Agents can reference this to understand deployment processes.*
+        -   **`docs/deployment/deployment_errors.md`**: Common deployment issues and troubleshooting. *Agents should consult this when debugging deployment problems.*
+    -   **`docs/development/`**: Development workflow documentation
+        -   **`docs/development/ci-cd.md`**: Detailed explanation of the CI/CD pipeline's architecture and workflows. *Agents should use this to understand how code gets from a pull request to production.*
+        -   **`docs/development/pipeline-setup.md`**: Step-by-step guide for configuring the CI/CD pipeline, including setting up GitHub secrets and branch protection rules. *Agents can reference this to understand the deployment prerequisites.*
+        -   **`docs/development/pre-commit-setup.md`**: Pre-commit hooks configuration and setup. *Agents should understand this for code quality enforcement.*
+        -   **`docs/development/release-notes.md`**: Release management and versioning process. *Agents should follow this for release procedures.*
+    -   **`docs/infrastructure/`**: Infrastructure and configuration documentation
+        -   **`docs/infrastructure/README.md`**: In-depth documentation of the Terraform infrastructure, explaining each component's purpose and configuration. *Agents should consult this before making any changes to the `infra/` directory.*
+        -   **`docs/infrastructure/configuration_checklist.md`**: Comprehensive setup checklist for new projects. *Agents should reference this when helping with project setup.*
+        -   **`docs/infrastructure/debug-log.md`**: Infrastructure debugging and troubleshooting guide. *Agents can use this for operational tasks and problem resolution.*
 
 ## Coding Conventions for AI Agents
 
@@ -229,4 +248,42 @@ Before submitting code, AI agents should verify:
 - [ ] Performance implications are considered
 - [ ] Error handling is implemented
 - [ ] Logging is appropriate
-- [ ] API documentation is accurate 
+- [ ] API documentation is accurate
+
+## Configuration Checklist for New Projects
+
+Whenever this repository is adapted for a new project or environment, you **must** consult the detailed checklist at `infra/configuration_checklist.md`.
+
+- This checklist covers every Terraform variable, script variable, and configuration value that needs to be changed for a new deployment.
+- It also documents common mistakes and pitfalls encountered during project migration.
+- Before running `terraform apply` or deploying, ensure you have completed every item in the checklist.
+
+**Agents and human developers:**
+- Reference this checklist to avoid missed configuration steps, authentication issues, or deployment failures.
+- Update the checklist if new variables or configuration requirements are added to the codebase.
+
+## Automatic Release Management for AI Agents
+
+AI agents must manage semantic versioning and release notes automatically as part of their workflow. The following rules apply:
+
+- **Versioning:**
+  - Agents must increment the project version in `pyproject.toml` (and any other version files) according to [Semantic Versioning](https://semver.org/):
+    - **MAJOR** version when making incompatible API or infrastructure changes
+    - **MINOR** version when adding functionality in a backwards-compatible manner
+    - **PATCH** version when making backwards-compatible bug fixes or documentation-only changes
+  - The version bump must be determined by the type of change requested by the user (e.g., "add feature" → MINOR, "fix bug" → PATCH, "breaking change" → MAJOR).
+
+- **Release Notes:**
+  - For every version bump, agents must append a new entry to `docs/release-notes.md` summarizing the changes, grouped by type (Added, Changed, Fixed, Removed, Security, Infra, Docs, etc.).
+  - Release notes must be clear, human-readable, and reference the user request that triggered the change.
+
+- **Changelog:**
+  - Agents must continue to update `CHANGELOG.md` as before, but `docs/release-notes.md` is the canonical, user-facing release history.
+
+- **Automation:**
+  - All of the above must be performed automatically by the agent as part of any code or infrastructure change, without requiring manual intervention.
+
+- **Documentation:**
+  - Reference and link to `docs/release-notes.md` in `README.md` and other relevant documentation.
+
+See `docs/release-notes.md` for the full release history. 
