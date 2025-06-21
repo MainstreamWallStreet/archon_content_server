@@ -8,6 +8,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     name: Run Tests
+    permissions:
+      pull-requests: write
     
     steps:
       - name: Checkout code
