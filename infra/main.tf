@@ -16,17 +16,17 @@ data "google_project" "current" {}
 
 # Existing service accounts (pre-created outside Terraform)
 data "google_service_account" "cloud_run_sa" {
-  account_id = "cloud-run-banshee-sa"
+  account_id = "cloud-run-zergling-sa"
 }
 
 data "google_service_account" "deploy_sa" {
-  account_id = "deploy-banshee-sa"
+  account_id = "deploy-zergling-sa"
 }
 
 # Artifact Registry
 resource "google_artifact_registry_repository" "docker_repo" {
   location      = var.region
-  repository_id = "banshee"
+  repository_id = "zergling"
   format        = "DOCKER"
 }
 
@@ -39,14 +39,14 @@ resource "google_artifact_registry_repository_iam_member" "cloudbuild_writer" {
 
 # Workload Identity Pool and provider
 resource "google_iam_workload_identity_pool" "github_pool" {
-  workload_identity_pool_id = "banshee-github-pool-v3"
-  display_name              = "Banshee GitHub Actions Pool"
+  workload_identity_pool_id = "zergling-github-pool-v3"
+  display_name              = "Zergling GitHub Actions Pool"
 }
 
 resource "google_iam_workload_identity_pool_provider" "github_provider_v3" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.github_pool.workload_identity_pool_id
-  workload_identity_pool_provider_id = "banshee-github-provider"
-  display_name                       = "Banshee GitHub Actions Provider"
+  workload_identity_pool_provider_id = "zergling-github-provider"
+  display_name                       = "Zergling GitHub Actions Provider"
 
   attribute_mapping = {
     "google.subject"       = "assertion.sub"
@@ -55,7 +55,7 @@ resource "google_iam_workload_identity_pool_provider" "github_provider_v3" {
 
   oidc { issuer_uri = "https://token.actions.githubusercontent.com" }
 
-  attribute_condition = "attribute.repository == \"MainstreamWallStreet/banshee-server-rebuild\" || attribute.repository == \"mainstreamwallstreet/banshee-server-rebuild\""
+  attribute_condition = "attribute.repository == \"MainstreamWallStreet/zergling-server-template\" || attribute.repository == \"mainstreamwallstreet/zergling-server-template\""
 }
 
 resource "google_service_account_iam_member" "github_wif" {
@@ -79,8 +79,8 @@ resource "google_clouddeploy_target" "dev" {
   }
 }
 
-resource "google_clouddeploy_delivery_pipeline" "banshee" {
-  name     = "banshee-pipeline"
+resource "google_clouddeploy_delivery_pipeline" "zergling" {
+  name     = "zergling-pipeline"
   location = var.region
 
   serial_pipeline {
@@ -103,13 +103,20 @@ resource "google_project_iam_member" "deploy_sa_user" {
   member  = "serviceAccount:${data.google_service_account.deploy_sa.email}"
 }
 
+# Add Logs Writer role for Cloud Deploy
+resource "google_project_iam_member" "deploy_logs_writer" {
+  project = var.project
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${data.google_service_account.deploy_sa.email}"
+}
+
 resource "google_project_iam_member" "cloudbuild_deployer" {
   project = var.project
   role    = "roles/clouddeploy.releaser"
   member  = "serviceAccount:${data.google_project.current.number}@cloudbuild.gserviceaccount.com"
 }
 
-# IAM for cloud-run-banshee-sa
+# IAM for cloud-run-zergling-sa
 resource "google_project_iam_member" "cloud_run_builder" {
   project = var.project
   role    = "roles/cloudbuild.builds.builder"
@@ -154,72 +161,38 @@ resource "google_project_iam_member" "cloud_run_secret_accessor" {
 resource "google_cloud_run_service_iam_member" "public_access" {
   location = var.region
   project  = var.project
-  service  = "banshee-api"
+  service  = "zergling-api"
   role     = "roles/run.invoker"
   member   = "allUsers"
 }
 
-# API key secrets
-resource "google_secret_manager_secret" "api_ninjas_key" {
-  secret_id = "api-ninjas-key"
+# Secret Manager - Zergling API Key
+resource "google_secret_manager_secret" "zergling_api_key" {
+  secret_id = "zergling-api-key"
   replication {
     auto {}
   }
 }
 
-resource "google_secret_manager_secret_version" "api_ninjas_key" {
-  secret      = google_secret_manager_secret.api_ninjas_key.id
-  secret_data = var.api_ninjas_key
+resource "google_secret_manager_secret_version" "zergling_api_key" {
+  secret      = google_secret_manager_secret.zergling_api_key.id
+  secret_data = var.zergling_api_key
 }
 
-resource "google_secret_manager_secret" "raven_api_key" {
-  secret_id = "raven-api-key"
+# Secret Manager - Google Service Account
+resource "google_secret_manager_secret" "google_sa" {
+  secret_id = "zergling-google-sa-value"
   replication {
     auto {}
   }
 }
 
-resource "google_secret_manager_secret_version" "raven_api_key" {
-  secret      = google_secret_manager_secret.raven_api_key.id
-  secret_data = var.raven_api_key
-}
-
-resource "google_secret_manager_secret" "banshee_api_key" {
-  secret_id = "banshee-api-key"
-  replication {
-    auto {}
-  }
-}
-
-resource "google_secret_manager_secret_version" "banshee_api_key" {
-  secret      = google_secret_manager_secret.banshee_api_key.id
-  secret_data = var.banshee_api_key
-}
-
-resource "google_secret_manager_secret" "sendgrid_api_key" {
-  secret_id = "sendgrid-api-key"
-  replication {
-    auto {}
-  }
-}
-
-resource "google_secret_manager_secret_version" "sendgrid_api_key" {
-  secret      = google_secret_manager_secret.sendgrid_api_key.id
-  secret_data = var.sendgrid_api_key
-}
-
-resource "google_secret_manager_secret" "google_sa_value" {
-  secret_id = "banshee-google-sa-value"
-  replication {
-    auto {}
-  }
-}
-
-resource "google_secret_manager_secret_version" "google_sa_value" {
-  secret      = google_secret_manager_secret.google_sa_value.id
+resource "google_secret_manager_secret_version" "google_sa" {
+  secret      = google_secret_manager_secret.google_sa.id
   secret_data = var.google_sa_value
 }
 
+# Secret Manager - Alert From Email
 resource "google_secret_manager_secret" "alert_from_email" {
   secret_id = "alert-from-email"
   replication {
@@ -229,23 +202,10 @@ resource "google_secret_manager_secret" "alert_from_email" {
 
 resource "google_secret_manager_secret_version" "alert_from_email" {
   secret      = google_secret_manager_secret.alert_from_email.id
-  secret_data = var.alert_from_email
+  secret_data = "alerts@zergling.com"
 }
 
-# Web interface password secret
-resource "google_secret_manager_secret" "web_password" {
-  secret_id = "banshee-web-password"
-  replication {
-    auto {}
-  }
-}
-
-resource "google_secret_manager_secret_version" "web_password" {
-  secret      = google_secret_manager_secret.web_password.id
-  secret_data = var.banshee_web_password
-}
-
-# Alert recipients secret
+# Secret Manager - Alert Recipients
 resource "google_secret_manager_secret" "alert_recipients" {
   secret_id = "alert-recipients"
   replication {
@@ -255,26 +215,26 @@ resource "google_secret_manager_secret" "alert_recipients" {
 
 resource "google_secret_manager_secret_version" "alert_recipients" {
   secret      = google_secret_manager_secret.alert_recipients.id
-  secret_data = jsonencode(var.alert_recipients)
+  secret_data = "admin@zergling.com"
 }
 
 # Allow Cloud Run SA to write to logs bucket
 resource "google_storage_bucket_iam_member" "cloud_run_logs_writer" {
-  bucket = "banshee-tf-state-202407"
+  bucket = "zergling-tf-state-202407"
   role   = "roles/storage.objectCreator"
   member = "serviceAccount:${data.google_service_account.cloud_run_sa.email}"
 }
 
-# Storage bucket for Banshee data
-resource "google_storage_bucket" "banshee_data" {
-  name     = "banshee-data"
+# Storage bucket for Zergling data
+resource "google_storage_bucket" "zergling_data" {
+  name     = "zergling-data"
   location = var.region
   uniform_bucket_level_access = true
 }
 
-resource "google_storage_bucket_iam_member" "banshee_data_writer" {
-  bucket = google_storage_bucket.banshee_data.name
-  role   = "roles/storage.objectAdmin"
+resource "google_storage_bucket_iam_member" "zergling_data_writer" {
+  bucket = google_storage_bucket.zergling_data.name
+  role   = "roles/storage.objectViewer"
   member = "serviceAccount:${data.google_service_account.cloud_run_sa.email}"
 }
 

@@ -1,7 +1,6 @@
 substitutions:
   _REGION: us-central1
-  _PIPELINE: banshee-pipeline
-  _SERVICE: api
+  _SERVICE: zergling-api
 
 steps:
   # 1. Build image
@@ -13,31 +12,72 @@ steps:
       - '-f'
       - Dockerfile
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/banshee/banshee:$BUILD_ID'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:latest'
       - '.'
 
-  # 2. Push
+  # 2. Push image
   - id: Push
     name: gcr.io/cloud-builders/docker
     args:
       - push
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/banshee/banshee:$BUILD_ID'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
+    waitFor: ['Build']
 
-  # 3. Cloud Deploy release
-  - id: Release
+  # 3. Deploy to Cloud Run
+  - id: Deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: gcloud
     args:
+      - run
       - deploy
-      - releases
-      - create
-      - 'rel-$BUILD_ID'
-      - '--delivery-pipeline=${_PIPELINE}'
+      - ${_SERVICE}
+      - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
       - '--region=${_REGION}'
-      - '--images=${_SERVICE}=${_REGION}-docker.pkg.dev/$PROJECT_ID/banshee/banshee:$BUILD_ID'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--memory=4Gi'
+      - '--cpu=2'
+      - '--concurrency=2'
+      - '--timeout=300'
+      - '--service-account=cloud-run-zergling-sa@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--set-env-vars=EXAMPLE_BUCKET=zergling-data,DEBUG=false,LOG_LEVEL=INFO'
+      - '--set-secrets=ZERGLING_API_KEY=zergling-api-key:latest'
+      - '--set-secrets=GOOGLE_APPLICATION_CREDENTIALS_JSON=zergling-google-sa-value:latest'
+    waitFor: ['Push']
+
+  # 4. Verify deployment
+  - id: Verify
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        echo "🏥 Verifying deployment..."
+        sleep 30
+        MAX_RETRIES=10
+        RETRY_COUNT=0
+        
+        while [ $$RETRY_COUNT -lt $$MAX_RETRIES ]; do
+          if curl -f -s "https://${_SERVICE}-$PROJECT_NUMBER.${_REGION}.run.app/health" > /dev/null; then
+            echo "✅ Health check passed!"
+            break
+          else
+            echo "   Health check failed (attempt $$((RETRY_COUNT + 1))/$$MAX_RETRIES)"
+            RETRY_COUNT=$$((RETRY_COUNT + 1))
+            if [ $$RETRY_COUNT -eq $$MAX_RETRIES ]; then
+              echo "❌ Health check failed after $$MAX_RETRIES attempts"
+              exit 1
+            fi
+            sleep 10
+          fi
+        done
+    waitFor: ['Deploy']
 
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/banshee/banshee:$BUILD_ID'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY

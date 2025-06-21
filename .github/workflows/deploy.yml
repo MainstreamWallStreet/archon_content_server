@@ -1,0 +1,167 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+env:
+  PROJECT_ID: mainstreamwallstreet
+  REGION: us-central1
+  SERVICE_NAME: zergling-api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.CLOUD_RUN_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker
+
+      - name: Build and Deploy
+        id: build-deploy
+        run: |
+          echo "🚀 Starting deployment..."
+          
+          # Submit build to Cloud Build
+          echo "🔨 Starting Cloud Build..."
+          gcloud builds submit \
+            --config=cloudbuild.yaml \
+            --substitutions=_REGION=${{ env.REGION }},_SERVICE=${{ env.SERVICE_NAME }} \
+            .
+          
+          echo "✅ Cloud Build completed successfully!"
+
+      - name: Get Service URL
+        id: service-url
+        run: |
+          echo "🌐 Getting service URL..."
+          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --format="value(status.url)")
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "🌐 Service URL: $URL"
+
+      - name: Verify Deployment
+        id: verify
+        run: |
+          echo "🏥 Verifying deployment..."
+          
+          # Wait for Cloud Run service to be ready
+          echo "⏳ Waiting for Cloud Run service to be ready..."
+          sleep 30
+          
+          # Test health endpoint
+          URL=$(gcloud run services describe ${{ env.SERVICE_NAME }} \
+            --region=${{ env.REGION }} \
+            --format="value(status.url)")
+          
+          MAX_RETRIES=10
+          RETRY_COUNT=0
+          
+          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+            if curl -f -s "$URL/health" > /dev/null; then
+              echo "✅ Health check passed!"
+              break
+            else
+              echo "   Health check failed (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)"
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+                echo "❌ Health check failed after $MAX_RETRIES attempts"
+                exit 1
+              fi
+              sleep 10
+            fi
+          done
+
+      - name: Create Deployment Summary
+        uses: actions/github-script@v7
+        if: success()
+        with:
+          script: |
+            const { data: commits } = await github.rest.repos.compareCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              base: context.payload.before,
+              head: context.payload.after
+            });
+            
+            const commitMessages = commits.commits
+              .map(commit => `- ${commit.commit.message.split('\n')[0]}`)
+              .join('\n');
+            
+            const summary = `## 🚀 Deployment Summary
+            
+            **Status**: ✅ Successfully deployed to production
+            
+            **Service**: ${{ env.SERVICE_NAME }}
+            **Region**: ${{ env.REGION }}
+            **URL**: ${{ steps.service-url.outputs.url }}
+            
+            **Deployment Steps**:
+            - Cloud Build: ✅ SUCCESS
+            - Cloud Run Deployment: ✅ SUCCESS
+            - Health Check: ✅ PASSED
+            
+            **Changes in this deployment**:
+            ${commitMessages}
+            
+            ---
+            *Deployed via GitHub Actions at ${new Date().toISOString()}*`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: summary
+            });
+
+      - name: Create Failure Summary
+        uses: actions/github-script@v7
+        if: failure()
+        with:
+          script: |
+            const buildStatus = '${{ steps.build-deploy.outcome }}' === 'success' ? '✅ SUCCESS' : '❌ FAILED';
+            const deployStatus = '${{ steps.service-url.outcome }}' === 'success' ? '✅ SUCCESS' : '❌ FAILED';
+            const healthStatus = '${{ steps.verify.outcome }}' === 'success' ? '✅ PASSED' : '❌ FAILED';
+            
+            const summary = `## ❌ Deployment Failed
+            
+            **Service**: ${{ env.SERVICE_NAME }}
+            **Region**: ${{ env.REGION }}
+            
+            **Failure Details**:
+            - Cloud Build: ${buildStatus}
+            - Cloud Run Deployment: ${deployStatus}
+            - Health Check: ${healthStatus}
+            
+            **Next Steps**:
+            1. Check the GitHub Actions logs for detailed error information
+            2. Verify GCP service account permissions
+            3. Check Cloud Build and Cloud Run logs in GCP Console
+            4. Test deployment manually using \`./scripts/test_deployment.sh\`
+            
+            ---
+            *Deployment failed via GitHub Actions at ${new Date().toISOString()}*`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: summary
+            }); 

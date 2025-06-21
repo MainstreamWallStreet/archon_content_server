@@ -1,62 +1,33 @@
-# Banshee Server
+# Zergling FastAPI Server Template
 
-Banshee is a FastAPI-based backend for managing stock watchlists, earnings alerts, and notifications. It integrates with Google Cloud Storage, SendGrid, and external APIs to provide robust alerting and data synchronization for financial events.
+A production-ready FastAPI server template with GCP integration, API key auth, GCS-based storage, background scheduler, and CI/CD. All legacy and business-specific code has been removed.
 
 ## Features
 
-- **Watchlist Management**: Add, remove, and list stock tickers.
-- **Earnings Alerts**: Track upcoming earnings calls and send notifications.
-- **Global and User Alerts**: Send system-wide or user-specific email notifications.
-- **Google Cloud Integration**: Uses GCS for persistent storage of watchlists and call queues.
-- **SendGrid Integration**: Email notifications for alerts and system events.
-- **API Key and Basic Auth Security**: Protects endpoints with API keys and/or basic authentication.
-- **Automated Data Sync**: Scheduled tasks for syncing earnings data and sending queued emails.
-- **Self-Contained Background Scheduler**: All periodic jobs run inside the server—no external cron or cloud scheduler needed.
-- **Comprehensive Test Suite**: Includes robust async and endpoint tests.
-- **Reliable Cleanup on Ticker Deletion**: Deleting a ticker now reliably removes all related earnings calls and queued emails for that ticker, with robust regression tests to ensure correctness.
-- **Deduplication and Manual Cleanup**: Includes scripts and endpoints to deduplicate and manually clean up the email/call queues for maintenance.
-
-## Background Scheduler: How Banshee Automates Everything
-
-Banshee includes a built-in, self-contained background scheduler that automates all periodic operations. This means you do **not** need to set up any external cron jobs, Google Cloud Scheduler, or other automation tools. If the server is running, your jobs are running.
-
-### What the Scheduler Does
-
-- **Daily Sync (00:00 UTC / 19:00 EST)**
-  - Refreshes upcoming earnings calls for all tickers
-  - Queues reminder emails (1 week, 1 day, and 1 hour before each call)
-  - Cleans up old/past data
-- **Hourly Email Dispatch**
-  - Scans the email queue for any emails due in the next hour
-  - Sends those emails and removes them from the queue
-- **Manual Triggers**
-  - You can still trigger these operations manually via `/tasks/daily-sync`, `/tasks/upcoming-sync`, and `/tasks/send-queued-emails` endpoints
-
-### How It Works
-
-- The scheduler is started automatically when the FastAPI app starts, and stopped when the app shuts down.
-- Uses Python's `asyncio` for non-blocking background tasks.
-- All logic is covered by tests, and you can manually trigger syncs via API endpoints.
-- No external dependencies: works the same in local dev, staging, or production.
-
-### Why This Design?
-
-- **Self-contained**: No ops or cloud setup required.
-- **Portable**: Works anywhere you run the server.
-- **Reliable**: If the server is running, your periodic jobs are running.
+- **FastAPI Framework**: Modern, fast web framework with automatic API documentation
+- **Google Cloud Integration**: GCS for storage, Secret Manager for secrets, Cloud Run for deployment
+- **Authentication**: API key-based authentication with configurable security
+- **Data Storage**: Generic GCS-based data store with JSON persistence
+- **Background Tasks**: Built-in scheduler for periodic operations
+- **Comprehensive Testing**: Full test suite with async support and mocking
+- **CI/CD Pipeline**: Automated build and deployment with Cloud Build and direct Cloud Run deployment
+- **Infrastructure as Code**: Terraform configuration for all GCP resources
+- **Development Environment**: Hot reload, Docker support, and development tools
+- **Production Ready**: Logging, error handling, health checks, and monitoring
 
 ## Requirements
 
 - Python 3.11+
-- Google Cloud credentials (for GCS)
-- SendGrid account (for email notifications)
+- Google Cloud Platform account
+- Docker (for containerized deployment)
+- Terraform (for infrastructure management)
 
-## Installation
+## Quick Start
 
-1. **Clone the repository:**
+1. **Clone and customize:**
    ```sh
-   git clone https://github.com/MainstreamWallStreet/banshee-server-rebuild.git
-   cd banshee-server-rebuild
+   git clone <template-repo>
+   cd fastapi-server-template
    ```
 
 2. **Install dependencies:**
@@ -64,115 +35,461 @@ Banshee includes a built-in, self-contained background scheduler that automates 
    pip install -r requirements.txt
    ```
 
-3. **Set up environment variables:**
-   - Copy `sample.env` to `.env` and fill in your secrets and configuration.
-   - Required variables include:
-     - `GOOGLE_CLOUD_PROJECT`
-     - `GOOGLE_SA_VALUE`
-     - `API_NINJAS_KEY`
-     - `RAVEN_API_KEY`
-     - `BANSHEE_API_KEY`
-     - `BANSHEE_DATA_BUCKET`
-     - `EARNINGS_BUCKET`
-     - `EMAIL_QUEUE_BUCKET`
-     - `BANSHEE_WEB_PASSWORD`
-     - `SENDGRID_API_KEY`
-     - `ALERT_FROM_EMAIL`
-     - `ALERT_RECIPIENTS`
-     - `ENV`
+3. **Configure environment:**
+   ```sh
+   cp sample.env .env
+   # Edit .env with your configuration
+   ```
 
-## Running the Server
-
-For local development, use the provided entrypoint:
-
+4. **Run locally:**
 ```sh
-python run_banshee.py
+   python run.py
 ```
 
-This will start the FastAPI server on `http://0.0.0.0:8080` with hot reload and detailed logging.
+5. **Access API:**
+   - API: http://localhost:8080
+   - Documentation: http://localhost:8080/docs
+   - Health Check: http://localhost:8080/health
 
-## API Overview
+## Local Development Setup
+
+### Quick Setup (Recommended)
+
+For the easiest setup, use our automated script:
+
+```bash
+# Make sure you're authenticated with gcloud and have infrastructure deployed
+./scripts/setup_local_dev.sh
+```
+
+This script will:
+- Check your gcloud authentication
+- Verify infrastructure is deployed
+- Download the service account key
+- Generate an API key
+- Create your `.env` file
+- Test the setup
+
+### Manual Setup
+
+If you prefer to set up manually or the automated script doesn't work for your environment:
+
+### Prerequisites for Local Development
+
+Before running the application locally, you need to set up GCP authentication:
+
+1. **Install and authenticate gcloud CLI:**
+   ```bash
+   # Install gcloud CLI (if not already installed)
+   # Follow: https://cloud.google.com/sdk/docs/install
+   
+   # Authenticate with your GCP account
+   gcloud auth login
+   gcloud config set project YOUR_PROJECT_ID
+   ```
+
+2. **Deploy infrastructure first:**
+   ```bash
+   cd infra
+   terraform init
+   terraform plan
+   terraform apply
+   ```
+
+3. **Create service account key for local development:**
+   ```bash
+   # Create a directory for your credentials
+   mkdir -p ~/.config/gcp
+   
+   # Download the service account key
+   gcloud iam service-accounts keys create ~/.config/gcp/zergling-sa.json \
+     --iam-account=cloud-run-zergling-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com
+   ```
+
+4. **Configure your .env file:**
+   ```bash
+   cp sample.env .env
+   # Edit .env and update these values:
+   # - GOOGLE_CLOUD_PROJECT=your-actual-project-id
+   # - GOOGLE_APPLICATION_CREDENTIALS=/Users/yourusername/.config/gcp/zergling-sa.json
+   # - EXAMPLE_BUCKET=your-actual-bucket-name (from terraform output)
+   # - ZERGLING_API_KEY=your-secret-api-key
+   ```
+
+### Environment Variables for Local Development
+
+| Variable | Description | How to Set | Required For |
+|:---|:---|:---|:---|
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to service account JSON file | Download from GCP Console or use gcloud command above | Local Dev Only |
+| `GOOGLE_CLOUD_PROJECT` | Your GCP project ID | Use your actual project ID | Both |
+| `EXAMPLE_BUCKET` | GCS bucket name | Get from `terraform output` after running `terraform apply` | Both |
+| `ZERGLING_API_KEY` | API key for authentication | Create a secure random string | Both |
+
+### Testing Local Setup
+
+```bash
+# Test that your credentials work
+python -c "from google.cloud import storage; client = storage.Client(); print('✅ GCP authentication working')"
+
+# Test the application
+python run.py
+
+# In another terminal, test the API
+curl http://localhost:8080/health
+```
+
+## Setup Checklist
+
+### Prerequisites
+- [ ] Google Cloud Platform account with billing enabled
+- [ ] GitHub repository for your project
+- [ ] Local development environment with Python 3.11+
+- [ ] Docker installed locally
+- [ ] Terraform installed locally
+- [ ] Google Cloud CLI installed and authenticated
+
+### GCP Project Setup
+- [ ] Create a new GCP project or select existing project
+- [ ] Enable required APIs:
+  - [ ] Cloud Run API
+  - [ ] Cloud Build API
+  - [ ] Secret Manager API
+  - [ ] Storage API
+  - [ ] Artifact Registry API
+  - [ ] IAM API
+- [ ] Create service accounts:
+  - [ ] Cloud Run service account (`cloud-run-zergling-sa`)
+  - [ ] Deployment service account (`deploy-zergling-sa`)
+
+### Infrastructure Deployment
+- [ ] Customize `infra/terraform.tfvars` with your project details
+- [ ] Run Terraform to create infrastructure:
+  ```sh
+  cd infra
+  terraform init
+  terraform plan
+  terraform apply
+  ```
+- [ ] Update Secret Manager values with your actual data
+- [ ] Verify infrastructure is working with manual deployment test
+
+### GitHub Actions Setup
+- [ ] Fork or create your own repository from this template
+- [ ] Configure GitHub repository secrets (see GitHub Actions Configuration below)
+- [ ] Test the CI/CD pipeline with a push to main branch
+- [ ] Verify automated deployment works correctly
+
+### Local Development Setup
+- [ ] Configure local environment variables in `.env`
+- [ ] Test local development server
+- [ ] Run test suite to ensure everything works
+- [ ] Test Docker build locally
+
+## GitHub Actions Configuration
+
+### Required Repository Secrets
+
+You must configure these secrets in your GitHub repository settings (`Settings` → `Secrets and variables` → `Actions`):
+
+#### 1. `WORKLOAD_IDENTITY_PROVIDER`
+**Description**: The Workload Identity provider for GitHub Actions to authenticate with GCP
+**Value**: Full provider path from Terraform output
+**How to get it**:
+```bash
+cd infra
+terraform output workload_identity_provider
+```
+**Example**: `projects/123456789/locations/global/workloadIdentityPools/zergling-github-pool-v3/providers/zergling-github-provider`
+
+#### 2. `CLOUD_RUN_SERVICE_ACCOUNT`
+**Description**: The service account email that GitHub Actions will impersonate
+**Value**: Service account email from Terraform output
+**How to get it**:
+```bash
+cd infra
+terraform output cloud_run_service_account
+```
+**Example**: `cloud-run-zergling-sa@your-project-id.iam.gserviceaccount.com`
+
+### Optional Repository Secrets
+
+#### 3. `GCP_PROJECT_ID`
+**Description**: Your Google Cloud project ID (if different from default)
+**Value**: Your GCP project ID
+**Example**: `my-awesome-project-123`
+
+#### 4. `GCP_REGION`
+**Description**: Your preferred GCP region (if different from default)
+**Value**: GCP region name
+**Example**: `us-central1`
+
+### Setting Up Repository Secrets
+
+1. **Navigate to your repository settings**:
+   - Go to your GitHub repository
+   - Click `Settings` tab
+   - Click `Secrets and variables` → `Actions`
+
+2. **Add each secret**:
+   - Click `New repository secret`
+   - Enter the secret name (e.g., `WORKLOAD_IDENTITY_PROVIDER`)
+   - Enter the secret value
+   - Click `Add secret`
+
+3. **Verify secrets are set**:
+   - You should see all required secrets listed
+   - Secret values are masked for security
+
+### Testing GitHub Actions
+
+1. **Push to main branch** to trigger deployment:
+   ```bash
+   git add .
+   git commit -m "test: Trigger deployment"
+   git push origin main
+   ```
+
+2. **Monitor the deployment**:
+   - Go to `Actions` tab in your repository
+   - Click on the running workflow
+   - Check each step for success/failure
+
+3. **Verify deployment**:
+   - Check that the service URL is accessible
+   - Test the health endpoint
+   - Verify logs show successful deployment
+
+### Troubleshooting GitHub Actions
+
+#### Common Issues
+
+1. **Authentication Failures**
+   - Verify `WORKLOAD_IDENTITY_PROVIDER` is correct
+   - Check that `CLOUD_RUN_SERVICE_ACCOUNT` exists and has proper permissions
+   - Ensure Workload Identity is properly configured in GCP
+
+2. **Build Failures**
+   - Check Dockerfile syntax
+   - Verify all dependencies are in `requirements.txt`
+   - Review Cloud Build logs for specific errors
+
+3. **Deployment Failures**
+   - Verify service account has Cloud Run admin permissions
+   - Check that secrets exist in Secret Manager
+   - Review Cloud Run logs for application startup issues
+
+4. **Health Check Failures**
+   - Verify application starts correctly
+   - Check environment variables and secrets are properly configured
+   - Review application logs for startup errors
+
+#### Debug Commands
+
+```bash
+# Check Workload Identity configuration
+gcloud iam workload-identity-pools providers describe zergling-github-provider \
+  --workload-identity-pool=zergling-github-pool-v3 \
+  --location=global
+
+# Verify service account permissions
+gcloud projects get-iam-policy YOUR_PROJECT_ID \
+  --flatten="bindings[].members" \
+  --format="table(bindings.role)" \
+  --filter="bindings.members:cloud-run-zergling-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com"
+
+# Test manual deployment
+./scripts/test_deployment.sh
+```
+
+## Configuration
+
+### Environment Variables
+
+The application uses the following environment variables. For local development, you can set them in a `.env` file. In production on Cloud Run, these are set via a combination of Secret Manager and the service's configuration.
+
+| Variable | Description | Default / Example | Used In | Required For |
+|:---|:---|:---|:---|:---|
+| `APP_NAME` | The name of the application. | `zergling` | App | Both |
+| `LOG_LEVEL` | The logging level for the application. | `INFO` | App | Both |
+| `DEBUG` | Enables or disables debug mode. | `false` | App, Cloud Build | Both |
+| `ENV` | The deployment environment. | `dev` | App | Both |
+| `ZERGLING_API_KEY` | The secret API key for authentication. | `your-secret-api-key` | App (via Secret Manager) | Both |
+| `GOOGLE_CLOUD_PROJECT`| Your Google Cloud Project ID. | `your-gcp-project-id` | App, Terraform | Both |
+| `EXAMPLE_BUCKET` | The GCS bucket for data storage. | `your-gcs-bucket-name`| App, Cloud Build | Both |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to the GCP service account JSON file. | `/path/to/creds.json`| Local Dev Only | Local Dev Only |
+
+### GCP Setup
+
+1. **Create a GCP project**
+2. **Enable required APIs:**
+   - Cloud Run API
+   - Cloud Build API
+   - Secret Manager API
+   - Storage API
+   - Artifact Registry API
+
+3. **Create service accounts:**
+   - Cloud Run service account
+   - Deployment service account
+
+4. **Set up Workload Identity** (for GitHub Actions)
+
+## API Endpoints
 
 ### Authentication
+All endpoints require an `X-API-Key` header with your configured API key.
 
-- Most endpoints require an `X-API-Key` header with the value set to your `BANSHEE_API_KEY`.
-- The `/web` UI endpoint uses HTTP Basic Auth with the password from `BANSHEE_WEB_PASSWORD`.
+### Core Endpoints
 
-### Endpoints
+- `GET /` - Health check
+- `GET /health` - Detailed health status
+- `GET /docs` - Interactive API documentation
+- `GET /items` - List all items
+- `POST /items` - Create new item
+- `GET /items/{item_id}` - Get specific item
+- `PUT /items/{item_id}` - Update item
+- `DELETE /items/{item_id}` - Delete item
 
-- `GET /`  
-  Health check. Returns API status.
+### Admin Endpoints
 
-- `GET /watchlist`  
-  List all tickers in the watchlist.
+- `POST /admin/tasks/run-scheduler` - Trigger background tasks
 
-- `POST /watchlist`  
-  Add a ticker to the watchlist.  
-  **Body:** `{ "ticker": "AAPL", "user": "alice" }`
+## Development
 
-- `DELETE /watchlist/{ticker}`  
-  Remove a ticker from the watchlist and clean up related data. **This now reliably deletes all earnings calls and queued emails for the ticker.**
+### Running Tests
+```sh
+# Run all tests
+pytest
 
-- `GET /earnings/upcoming`  
-  List upcoming earnings calls.
+# Run with coverage
+pytest --cov=src
 
-- `GET /earnings/{ticker}`  
-  Get earnings data for a specific ticker.
+# Run specific test file
+pytest tests/test_api.py
+```
 
-- `POST /send-global-alert`  
-  Send a global alert email to all configured recipients.  
-  **Body:** `{ "subject": "Alert", "message": "Something happened" }`
+### Code Quality
+```sh
+# Type checking
+mypy src/
 
-- `POST /tasks/daily-sync`  
-  Trigger a daily sync of earnings and watchlist data.
+# Linting
+flake8 src/
 
-- `POST /tasks/upcoming-sync`  
-  Trigger a sync of upcoming earnings calls.
+# Formatting
+black src/
+```
 
-- `POST /tasks/send-queued-emails`  
-  Send all queued emails.
-
-- `POST /test-email`  
-  Send a test email to the configured address.
-
-- `GET /web`  
-  Access the web UI (requires HTTP Basic Auth).
-
-## Email & Alerting
-
-- Uses SendGrid for all email notifications.
-- Alerts can be sent to all admins or individual users.
-- Recipients and sender are configured via environment variables.
-
-## Testing
-
-- Tests are located in the `__tests__` directory.
-- To run all tests:
+### Local Development
   ```sh
-  pytest __tests__/
-  ```
-- Tests cover:
-  - Watchlist API
-  - Notification and alerting logic
-  - Earnings alerts and data sync
-  - GCS job queue logic
+# Start with hot reload
+python run.py
+
+# Start with Docker
+docker build -t fastapi-template .
+docker run -p 8080:8080 fastapi-template
+```
 
 ## Deployment
 
-- See `deploy.md` for details on deploying to Google Cloud Run using Cloud Build and Cloud Deploy.
-- All secrets and environment variables should be managed securely (e.g., via Google Secret Manager).
+### Infrastructure Setup
+```sh
+cd infra
+terraform init
+terraform plan
+terraform apply
+```
+
+### CI/CD Pipeline
+The template includes:
+- **GitHub Actions**: Automated testing and deployment
+- **Cloud Build**: Automated Docker image building
+- **Cloud Run**: Direct deployment with health verification
+- **Artifact Registry**: Container image storage
+
+### Manual Deployment
+```sh
+# Test deployment script
+./scripts/test_deployment.sh
+
+# Direct Cloud Run deployment
+gcloud run deploy zergling-api \
+  --image=us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:latest \
+  --region=us-central1 \
+  --platform=managed
+```
+
+## Architecture
+
+### Core Components
+
+- **API Layer**: FastAPI application with route handlers
+- **Data Layer**: GCS-based JSON storage with generic interface
+- **Scheduler**: Background task management
+- **Configuration**: Environment and secret management
+
+### Data Flow
+
+1. **Request** → API endpoint with authentication
+2. **Validation** → Pydantic models and business logic
+3. **Storage** → GCS bucket operations
+4. **Response** → JSON response with proper status codes
+
+### Background Tasks
+
+- **Scheduler**: Runs periodic operations
+- **Job Queue**: Manages async task processing
+
+## Customization
+
+### Adding New Endpoints
+
+1. Define Pydantic models in `src/models.py`
+2. Add route handlers in `src/api.py`
+3. Write tests in `tests/test_api.py`
+4. Update API documentation
+
+### Adding New Data Types
+
+1. Extend the base data store interface
+2. Implement storage methods
+3. Add validation models
+4. Write comprehensive tests
+
+### Infrastructure Customization
+
+1. Modify `infra/terraform.tfvars`
+2. Update resource names and configurations
+3. Add new GCP services as needed
+4. Test infrastructure changes
+
+## Documentation
+
+- **[AGENTS.md](AGENTS.md)**: Guide for AI agents working with this codebase
+- **[docs/ci-cd.md](docs/ci-cd.md)**: CI/CD pipeline documentation
+- **[docs/pipeline-setup.md](docs/pipeline-setup.md)**: A step-by-step guide for configuring the CI/CD pipeline
+- **[docs/infra/README.md](docs/infra/README.md)**: Infrastructure documentation
+- **[docs/infra/quick-reference.md](docs/infra/quick-reference.md)**: Quick reference guide
+
+## Support
+
+For issues with this template:
+
+1. Check the [FastAPI documentation](https://fastapi.tiangolo.com/)
+2. Review [Google Cloud documentation](https://cloud.google.com/docs)
+3. Check the application logs for specific error messages
+4. Verify all customizations have been applied correctly
+5. Review the troubleshooting sections in the documentation
 
 ## Contributing
 
-Pull requests and issues are welcome! Please ensure all tests pass before submitting changes.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes following the coding standards
+4. Add tests for new functionality
+5. Update documentation as needed
+6. Submit a pull request
 
-## Maintenance & Cleanup
+## License
 
-- The system includes endpoints and scripts for deduplicating the email queue and cleaning up all calls/emails for a ticker.
-- These tools can be used for manual maintenance or in response to operational needs.
-
----
-
-**Main Authors:**  
-- Griffin Clark  
-- Mainstream Wall Street Team 
+This template is provided as-is for educational and development purposes. 

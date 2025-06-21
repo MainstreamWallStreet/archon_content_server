@@ -1,76 +1,166 @@
-# Raven Deployment Architecture
+# Deployment Guide
 
-This document describes how the various YAML configuration files work together to deploy the Raven API to Google Cloud Run.
+This document describes how to deploy the Zergling FastAPI server to Google Cloud Platform using Cloud Build and direct Cloud Run deployment.
 
-## Overview
+## Deployment Architecture
 
-The deployment process is managed by Google Cloud Deploy, which uses a pipeline-based approach to promote changes through different environments. The configuration is split across several YAML files in the `clouddeploy` directory.
+### Direct Cloud Run Deployment
+1. **Build**: Cloud Build creates Docker image and pushes to Artifact Registry
+2. **Deploy**: Direct deployment to Cloud Run via gcloud commands
 
-## Configuration Files
+## Prerequisites
 
-### 1. Pipeline Configuration (`clouddeploy/pipeline.yaml`)
+1. **GCP Project Setup**
+   - Enable required APIs (Cloud Run, Cloud Build, Secret Manager, etc.)
+   - Create service accounts with appropriate permissions
+   - Set up Workload Identity for GitHub Actions
 
-This file defines the overall deployment pipeline:
-- Uses the `DeliveryPipeline` resource type
-- Named `banshee-pipeline`
-- Currently configured with a single stage targeting the `dev` environment
-- The pipeline is serial, meaning stages run one after another
+2. **Infrastructure Deployment**
+   ```bash
+   cd infra
+   terraform init
+   terraform plan
+   terraform apply
+   ```
 
-### 2. Target Configuration (`clouddeploy/targets/dev.yaml`)
+3. **Secret Configuration**
+   ```bash
+   # Update API key
+   gcloud secrets versions add zergling-api-key --data-file=<(echo -n "your-actual-api-key")
+   
+   # Update service account credentials
+   gcloud secrets versions add zergling-google-sa-value --data-file=path/to/service-account.json
+   ```
 
-Defines the deployment target for the development environment:
-- Uses the `Target` resource type
-- Named `dev`
-- Specifies the Cloud Run location in `us-central1`
-- Part of the `mainstreamwallstreet` project
+## Automated Deployment
 
-### 3. Service Configuration (`clouddeploy/service.yaml`)
+### GitHub Actions Pipeline
 
-Defines the Cloud Run service configuration:
-- Uses the Knative serving API (`serving.knative.dev/v1`)
-- Named `banshee-api`
-- Key configurations:
-  - Autoscaling: Minimum scale set to 0 (allows service to scale to zero when not in use)
-  - Service Account: Uses `cloud-run-banshee-sa@mainstreamwallstreet.iam.gserviceaccount.com`
-  - Container Port: 8080
-  - Environment Variables: Securely managed through Google Cloud Secret Manager
-    - `API_NINJAS_KEY`
-    - `RAVEN_API_KEY`
-    - `BANSHEE_API_KEY`
-    - `SENDGRID_API_KEY`
-    - `RAVEN_URL` (static configuration)
+The repository includes automated CI/CD via GitHub Actions:
 
-## Deployment Flow
+1. **PR Testing** (`.github/workflows/pr-test.yml`)
+   - Runs on pull requests
+   - Executes linting, testing, and coverage checks
+   - Posts results as PR comments
 
-1. The pipeline (`pipeline.yaml`) orchestrates the deployment process
-2. When triggered, it deploys to the target defined in `targets/dev.yaml`
-3. The service configuration in `service.yaml` is applied to create/update the Cloud Run service
+2. **Deployment** (`.github/workflows/deploy.yml`)
+   - Triggers on merge to main branch
+   - Builds Docker image via Cloud Build
+   - Deploys directly to Cloud Run
+   - Verifies deployment with health checks
 
-## Security
+### Manual Deployment
 
-The deployment uses several security best practices:
-- Secrets are managed through Google Cloud Secret Manager
-- Service account with minimal required permissions
-- Environment variables are injected securely
-- Sensitive configuration files are mounted as secrets
+For manual deployments or testing:
 
-## Environment Variables and Secrets
+```bash
+# Use the test deployment script
+./scripts/test_deployment.sh
 
-The following secrets are required to be set up in Google Cloud Secret Manager:
-- `api-ninjas-key`
-- `raven-api-key`
-- `banshee-api-key`
-- `sendgrid-api-key`
-- `banshee-google-sa-value`
-- `alert-from-email`
-- `alert-recipients`
-- `banshee-web-password`
+# Or deploy directly
+gcloud run deploy zergling-api \
+  --image=us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:latest \
+  --region=us-central1 \
+  --platform=managed \
+  --allow-unauthenticated \
+  --memory=4Gi \
+  --cpu=2 \
+  --concurrency=2 \
+  --timeout=300 \
+  --service-account=cloud-run-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com \
+  --set-env-vars=EXAMPLE_BUCKET=zergling-data,DEBUG=false,LOG_LEVEL=INFO \
+  --set-secrets=ZERGLING_API_KEY=zergling-api-key:latest \
+  --set-secrets=GOOGLE_APPLICATION_CREDENTIALS_JSON=zergling-google-sa-value:latest
+```
 
-Static environment variables (configured in `service.yaml`):
-- `RAVEN_URL`: https://filing-fetcher-api-455624753981.us-central1.run.app
+## Why Direct Cloud Run Deployment?
 
-## Notes
+### Advantages over Cloud Deploy
 
-- The service is configured to scale to zero when not in use, optimizing costs
-- All sensitive data is managed through Google Cloud Secret Manager
-- The deployment is currently set up for a development environment only 
+1. **Simplicity**: Direct deployment without intermediate layers
+2. **Reliability**: Fewer failure points and easier debugging
+3. **Speed**: Faster deployment cycles
+4. **Compatibility**: No Skaffold version compatibility issues
+5. **Maintenance**: Easier to troubleshoot and maintain
+
+### Cloud Deploy Limitations
+
+- **Skaffold Version Issues**: Cloud Deploy uses Skaffold v2.16 which doesn't support Cloud Run natively
+- **Complexity**: Additional abstraction layer adds failure points
+- **Debugging**: Harder to troubleshoot deployment issues
+- **Dependencies**: Relies on Cloud Deploy service availability
+
+## Verification
+
+### Health Checks
+
+```bash
+# Test health endpoint
+curl -f https://zergling-api-gl7hc5q6rq-uc.a.run.app/health
+
+# Test with API key
+curl -H "X-API-Key: your-api-key" https://zergling-api-gl7hc5q6rq-uc.a.run.app/health
+```
+
+### Monitoring
+
+```bash
+# Check service status
+gcloud run services describe zergling-api --region=us-central1
+
+# View logs
+gcloud logs read "resource.type=cloud_run_revision AND resource.labels.service_name=zergling-api" --limit=50
+
+# Check build status
+gcloud builds list --limit=5
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Build Failures**
+   - Check Dockerfile syntax
+   - Verify dependencies in requirements.txt
+   - Review Cloud Build logs
+
+2. **Deployment Failures**
+   - Verify GCP permissions
+   - Check service account configuration
+   - Review Cloud Run logs
+
+3. **Health Check Failures**
+   - Verify application startup
+   - Check environment variables
+   - Review application logs
+
+### Debug Commands
+
+```bash
+# Check Cloud Run service status
+gcloud run services describe zergling-api --region=us-central1
+
+# View recent logs
+gcloud logs read "resource.type=cloud_run_revision" --limit=50
+
+# Test health endpoint
+curl https://zergling-api-455624753981.us-central1.run.app/health
+```
+
+## Security Considerations
+
+1. **API Key Authentication**: All endpoints (except `/health`) require valid API key
+2. **Service Account Permissions**: Minimal required permissions for Cloud Run service
+3. **Secret Management**: All secrets stored in Secret Manager
+4. **Workload Identity**: Secure GitHub Actions authentication without service account keys
+
+## Cost Optimization
+
+1. **Cloud Run**: Configure appropriate memory/CPU and concurrency settings
+2. **Artifact Registry**: Clean up old Docker images regularly
+3. **Cloud Storage**: Use lifecycle policies for data retention
+4. **Monitoring**: Set up billing alerts and monitor resource usage
+
+## Environment Setup
+
+Copy `sample.env`

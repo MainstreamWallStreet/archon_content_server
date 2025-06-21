@@ -1,4 +1,13 @@
 apiVersion: deploy.cloud.google.com/v1
+kind: DeliveryPipeline
+metadata:
+  name: zergling-pipeline                 # ← new pipeline
+description: Deploy Zergling API to Cloud Run
+serialPipeline:
+  stages:
+    - targetId: dev
+---
+apiVersion: deploy.cloud.google.com/v1
 kind: Target
 metadata:
   name: dev
@@ -8,4 +17,4 @@ run:
 executionConfigs:
 - usages: [RENDER, DEPLOY]
   serviceAccount: deploy-zergling-sa@mainstreamwallstreet.iam.gserviceaccount.com
-  artifactStorage: gs://us-central1.deploy-artifacts.mainstreamwallstreet.appspot.com
+  artifactStorage: gs://us-central1.deploy-artifacts.mainstreamwallstreet.appspot.com 

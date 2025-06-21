@@ -2,7 +2,7 @@
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: banshee-api
+  name: zergling-api
 spec:
   template:
     metadata:
@@ -13,80 +13,40 @@ spec:
         run.googleapis.com/container-concurrency: "2" # requests handled in parallel
         # keep full CPU even while idle (optional, costs more)
         run.googleapis.com/cpu-throttling: "false"
-        # ───────── service account ─────────
-        run.googleapis.com/service-account: "cloud-run-banshee-sa@${PROJECT_ID}.iam.gserviceaccount.com"
     spec:
-      # ───────── environment variables ─────────
-      containerConcurrency: 2
-      timeoutSeconds: 300
+      volumes:
+        # ───── Secret-backed volume for Google SA ─────
+        - name: google-sa
+          secret:
+            secretName: zergling-google-sa-value
+            items:
+              - key: latest
+                path: google-sa.json
       containers:
-        - name: api
-          image: api                   # 🔄 Cloud Deploy patches this tag
+        - name: zergling
+          image: zergling                   # 🔄 Cloud Deploy patches this tag
           resources:
             limits:
               memory: 4Gi                  # duplicate limits are fine
               cpu: "2"
+          ports:
+            - containerPort: 8080
           env:
             # ───── Static environment variables ─────
-            - name: GOOGLE_CLOUD_PROJECT
-              value: "${PROJECT_ID}"
-            - name: JOB_QUEUE_BUCKET
-              value: "banshee-data"
-            - name: BANSHEE_DATA_BUCKET
-              value: "banshee-data"
-            - name: EARNINGS_BUCKET
-              value: "banshee-earnings"
-            - name: EMAIL_QUEUE_BUCKET
-              value: "banshee-email-queue"
-            - name: ENV
-              value: "production"
-            - name: RAVEN_URL
-              value: "https://filing-fetcher-api-455624753981.us-central1.run.app"
-            
-            # ───── API Keys from Secret Manager ─────
-            - name: API_NINJAS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: api-ninjas-key
-                  key: latest
-            - name: RAVEN_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: raven-api-key
-                  key: latest
-            - name: BANSHEE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: banshee-api-key
-                  key: latest
-            - name: SENDGRID_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: sendgrid-api-key
-                  key: latest
-            
+            - name: EXAMPLE_BUCKET
+              value: "zergling-data"
+            - name: DEBUG
+              value: "false"
+            - name: LOG_LEVEL
+              value: "INFO"
             # ───── Google Service Account ─────
-            - name: GOOGLE_SA_VALUE
-              valueFrom:
-                secretKeyRef:
-                  name: banshee-google-sa-value
-                  key: latest
-            
-            # ───── Alert Configuration ─────
-            - name: ALERT_FROM_EMAIL
-              valueFrom:
-                secretKeyRef:
-                  name: alert-from-email
-                  key: latest
-            - name: ALERT_RECIPIENTS
-              valueFrom:
-                secretKeyRef:
-                  name: alert-recipients
-                  key: latest
-            
-            # ───── Web Interface ─────
-            - name: BANSHEE_WEB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: banshee-web-password
-                  key: latest
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/secrets/google-sa.json"
+          envFrom:
+            - secretRef:
+                name: zergling-api-key
+                key: latest
+          volumeMounts:
+            - name: google-sa
+              mountPath: /secrets
+              readOnly: true

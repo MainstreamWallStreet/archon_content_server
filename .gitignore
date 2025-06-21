@@ -1,6 +1,8 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
 *$py.class
 
 # C extensions
@@ -188,3 +190,47 @@ src/client_secret.json
 **/*.tfstate.*
 **/*.tfvars
 !**/example.tfvars
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtualenv
+venv/
+.env/
+.venv/
+ENV/
+
+# VSCode
+.vscode/
+
+# macOS
+.DS_Store
+
+# Docker
+*.log
+
+# Test/coverage
+.coverage
+.pytest_cache/
+
+# Environment and secrets
+.env
+.env.*
+*.tfvars
+*.tfstate*
+.terraform/
+
+# GCP
+*.json
+
+# Node/npm (if any frontend)
+node_modules/
+
+# Ignore local scripts/output
+*.bak
+*.swp
+gcp-service-account.json

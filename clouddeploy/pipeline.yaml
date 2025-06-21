@@ -1,8 +1,8 @@
 apiVersion: deploy.cloud.google.com/v1
 kind: DeliveryPipeline
 metadata:
-  name: banshee-pipeline                 # ← new pipeline
-description: Promote Filing‑Fetcher API to Cloud Run
+  name: zergling-pipeline                 # ← new pipeline
+description: Promote Zergling API to Cloud Run
 serialPipeline:
   stages:
     - targetId: dev

@@ -1,7 +1,7 @@
 variable "project" {}
 variable "region" { default = "us-central1" }
 variable "github_owner" { default = "MainstreamWallStreet" }
-variable "github_repo" { default = "banshee-server-rebuild" }
+variable "github_repo" { default = "zergling-server-template" }
 
 # Application configuration
 variable "image" {
@@ -9,34 +9,9 @@ variable "image" {
   type        = string
 }
 
-# API Keys
-variable "api_ninjas_key" {
-  description = "API Ninjas API key"
-  type        = string
-  sensitive   = true
-}
-
-variable "raven_api_key" {
-  description = "Raven API key"
-  type        = string
-  sensitive   = true
-}
-
-variable "banshee_api_key" {
-  description = "Banshee API key"
-  type        = string
-  sensitive   = true
-}
-
-variable "sendgrid_api_key" {
-  description = "SendGrid API key"
-  type        = string
-  sensitive   = true
-}
-
-# Admin configuration
-variable "admin_phone" {
-  description = "Admin phone number"
+# Zergling API Key
+variable "zergling_api_key" {
+  description = "API key required to access Zergling server endpoints"
   type        = string
   sensitive   = true
 }
@@ -48,12 +23,18 @@ variable "google_sa_value" {
   sensitive   = true
 }
 
+# Admin configuration
+variable "admin_phone" {
+  description = "Admin phone number"
+  type        = string
+  default     = "+1234567890"
+}
+
 variable "alert_from_email" {
   description = "Email address to send alerts from"
   type        = string
   default     = "gclark0812@gmail.com"
 }
-
 
 variable "earnings_bucket" {
   description = "Bucket for upcoming earnings data"
@@ -71,8 +52,14 @@ variable "alert_recipients" {
   default     = ["gclark0812@gmail.com", "psmith1111@icloud.com"]
 }
 
-variable "banshee_web_password" {
-  description = "Password for the Banshee web interface"
+variable "zergling_web_password" {
+  description = "Password for the Zergling web interface"
   type        = string
   sensitive   = true
+}
+
+# Example bucket
+variable "example_bucket" {
+  description = "GCS bucket for storing and retrieving objects"
+  type        = string
 }
