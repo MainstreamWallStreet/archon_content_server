@@ -2,6 +2,104 @@
 
 This Agents.md file provides comprehensive guidance for AI agents working with the Zergling FastAPI server template codebase.
 
+## Request Management Workflow
+
+### Initial Request Processing
+
+When a user submits a request, AI agents must follow this structured approach:
+
+1. **Request Analysis**: 
+   - If the user has filled out `init_questionnaire.md`, analyze their requirements
+   - If not, guide them to complete the questionnaire first
+   - Create a new request document using the template from `docs/request-archive/request_template.md`
+   - Save it as `current_request.md` in the root directory
+
+2. **Jobs to be Done Analysis**:
+   - Transform the user's request into a detailed "Jobs to be Done" analysis
+   - Break down the request into specific, actionable tasks
+   - Document all assumptions made during analysis
+   - Create a step-by-step implementation plan
+
+3. **TDD Approach**:
+   - **ALWAYS** write tests first before implementing any functionality
+   - Follow the Red-Green-Refactor cycle:
+     - Write failing tests (Red)
+     - Implement minimal code to pass tests (Green)
+     - Refactor and improve code (Refactor)
+   - Ensure all tests pass before proceeding to the next step
+
+4. **Documentation-Based Development**:
+   - Document every decision, assumption, and implementation step
+   - Update the `current_request.md` file with progress notes
+   - Include technical rationale for architectural decisions
+   - Document any deviations from the original plan
+
+### Implementation Process
+
+For each implementation step:
+
+1. **Planning Phase**:
+   - Document the specific task to be completed
+   - List all files that will be modified or created
+   - Define acceptance criteria and test cases
+   - Update `current_request.md` with the plan
+
+2. **Development Phase**:
+   - Write comprehensive tests first (TDD)
+   - Implement the minimal code needed to pass tests
+   - Follow existing code patterns and conventions
+   - Ensure all linting and type checking passes
+
+3. **Testing Phase**:
+   - Run all existing tests to ensure no regressions
+   - Run new tests to verify functionality
+   - Perform manual testing if required
+   - Document test results in `current_request.md`
+
+4. **Documentation Phase**:
+   - Update relevant documentation files
+   - Add API documentation for new endpoints
+   - Update README files if needed
+   - Document any configuration changes
+
+### Request Completion
+
+When a request is completed:
+
+1. **Final Testing**:
+   - Run the complete test suite
+   - Verify all acceptance criteria are met
+   - Perform integration testing
+   - Document final test results
+
+2. **Documentation Finalization**:
+   - Complete all implementation notes in `current_request.md`
+   - Document lessons learned and best practices
+   - Note any future improvements or follow-up tasks
+
+3. **Archive Process**:
+   - Move `current_request.md` to `docs/request-archive/` with a timestamp
+   - Copy `docs/request-archive/request_template.md` to `current_request.md` in root
+   - Update the archive index if needed
+
+### Quality Assurance Requirements
+
+AI agents must ensure:
+
+- **Test Coverage**: All new code has comprehensive test coverage (90%+)
+- **Documentation**: All changes are properly documented
+- **Code Quality**: All code follows existing patterns and passes linting
+- **Security**: All security best practices are followed
+- **Performance**: Code meets performance requirements
+- **Maintainability**: Code is clean, readable, and maintainable
+
+### Communication Guidelines
+
+- **Progress Updates**: Regularly update `current_request.md` with progress
+- **Issue Documentation**: Document any problems encountered and their solutions
+- **Decision Rationale**: Explain the reasoning behind technical decisions
+- **Assumption Tracking**: Keep a running list of all assumptions made
+
 ## Project Structure for AI Agent Navigation
 
 - `/src`: Source code that AI agents should analyze and modify

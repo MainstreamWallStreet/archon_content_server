@@ -46,20 +46,26 @@ fastapi_server_template/
 │   │   ├── pipeline-setup.md # Pipeline setup guide
 │   │   ├── pre-commit-setup.md # Pre-commit hooks setup
 │   │   └── release-notes.md # Release management guide
-│   └── infrastructure/   # Infrastructure documentation
-│       ├── configuration_checklist.md # Setup checklist
-│       ├── debug-log.md  # Infrastructure debugging
-│       └── README.md     # Infrastructure overview
+│   ├── infrastructure/   # Infrastructure documentation
+│   │   ├── configuration_checklist.md # Setup checklist
+│   │   ├── debug-log.md  # Infrastructure debugging
+│   │   └── README.md     # Infrastructure overview
+│   └── request-archive/  # Completed request documentation
+│       ├── README.md     # Archive overview
+│       └── request_template.md # Request template
 ├── scripts/              # Utility scripts
 │   ├── setup_local_dev.sh # Local development setup
 │   ├── setup_zergling.sh  # Zergling-specific setup
 │   ├── test_api.sh        # API testing script
-│   └── test_deployment.sh # Deployment testing
+│   ├── test_deployment.sh # Deployment testing
+│   └── manage_request.sh  # Request management workflow
 ├── .github/              # GitHub Actions workflows
 ├── requirements.txt      # Python dependencies
 ├── pyproject.toml        # Project configuration
 ├── Dockerfile           # Container configuration
 ├── run.py               # Application entry point
+├── init_questionnaire.md # Initial requirements questionnaire
+├── current_request.md   # Current active request (if any)
 └── README.md            # This file
 ```
 
@@ -98,6 +104,67 @@ fastapi_server_template/
    - API: http://localhost:8080
    - Documentation: http://localhost:8080/docs
    - Health Check: http://localhost:8080/health
+
+## Request Management Workflow
+
+This template includes a structured workflow for managing development requests and customizations:
+
+### Getting Started with a New Request
+
+1. **Complete the Initial Questionnaire:**
+   ```bash
+   # Fill out the questionnaire to define your requirements
+   open init_questionnaire.md
+   ```
+
+2. **Create a New Request:**
+   ```bash
+   # Use the request management script
+   ./scripts/manage_request.sh new
+   ```
+
+3. **AI Agent Processing:**
+   - The AI agent will analyze your requirements
+   - Create a detailed "Jobs to be Done" analysis
+   - Follow TDD (Test-Driven Development) approach
+   - Document all decisions and implementation steps
+   - Update `current_request.md` with progress
+
+### Request Management Commands
+
+```bash
+# Create a new request (archives current if exists)
+./scripts/manage_request.sh new
+
+# Archive current request and create new blank one
+./scripts/manage_request.sh archive
+
+# List all archived requests
+./scripts/manage_request.sh list
+
+# Show current request status
+./scripts/manage_request.sh status
+
+# Show help
+./scripts/manage_request.sh help
+```
+
+### Workflow Benefits
+
+- **Structured Approach**: Every request follows a consistent process
+- **TDD Methodology**: Tests are written first, ensuring quality
+- **Complete Documentation**: All decisions and implementations are recorded
+- **Knowledge Preservation**: Completed requests are archived for future reference
+- **Quality Assurance**: Comprehensive testing and validation at each step
+
+### Request Archive
+
+Completed requests are automatically archived in `docs/request-archive/` with:
+- Complete implementation history
+- Technical decisions and rationale
+- Test results and validation
+- Lessons learned and best practices
+- Future improvement suggestions
 
 ## Documentation
 
