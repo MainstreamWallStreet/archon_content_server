@@ -36,7 +36,7 @@ jobs:
       - name: Run linting
         run: |
           pip install flake8 black isort
-          flake8 src/ tests/
+          flake8 src/ tests/ --config=.flake8
           black --check src/ tests/
           isort --check-only src/ tests/
           

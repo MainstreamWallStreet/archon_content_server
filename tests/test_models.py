@@ -3,7 +3,6 @@ Tests for Pydantic models.
 """
 
 import pytest
-from datetime import datetime
 from pydantic import ValidationError
 
 from src.models import Item, ItemCreate, ItemUpdate

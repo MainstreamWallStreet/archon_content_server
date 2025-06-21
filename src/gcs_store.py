@@ -6,7 +6,6 @@ import json
 import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
-import io
 import os
 
 from google.cloud import storage
@@ -124,31 +123,22 @@ class GcsStore(DataStore):
             # Handle case where GOOGLE_APPLICATION_CREDENTIALS contains JSON content directly
             creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
             if creds_path and creds_path.startswith('{'):
-                import json
-                import tempfile
+                print("✅ Successfully parsed JSON credentials")
+            else:
+                print("⚠️  JSON decode error")
+                import base64
                 try:
-                    creds_data = json.loads(creds_path)
-                    print(f"✅ Successfully parsed JSON credentials")
-                except json.JSONDecodeError as e:
-                    print(f"⚠️  JSON decode error: {e}")
-                    import base64
-                    try:
-                        padding = 4 - (len(creds_path) % 4)
-                        if padding != 4:
-                            creds_path += '=' * padding
-                        decoded = base64.b64decode(creds_path).decode('utf-8')
-                        creds_data = json.loads(decoded)
-                        print(f"✅ Successfully decoded base64 credentials")
-                    except Exception as e:
-                        print(f"⚠️  Failed to decode credentials: {e}")
-                        print(f"📄 Credentials length: {len(creds_path)}")
-                        print(f"📄 First 100 chars: {creds_path[:100]}")
-                        raise
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-                    json.dump(creds_data, f)
-                    temp_creds_path = f.name
-                os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = temp_creds_path
-                print(f"📁 Created temporary credentials file: {temp_creds_path}")
+                    padding = 4 - (len(creds_path) % 4)
+                    if padding != 4:
+                        creds_path += '=' * padding
+                    decoded = base64.b64decode(creds_path).decode('utf-8')
+                    json.loads(decoded)  # Validate JSON format
+                    print("✅ Successfully decoded base64 credentials")
+                except Exception as e:
+                    print(f"⚠️  Failed to decode credentials: {e}")
+                    print(f"📄 Credentials length: {len(creds_path)}")
+                    print(f"📄 First 100 chars: {creds_path[:100]}")
+                    raise
             self.client = storage.Client()
             self.bucket = self.client.bucket(bucket_name)
             self.bucket_name = bucket_name

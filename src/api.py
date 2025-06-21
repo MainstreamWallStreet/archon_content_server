@@ -5,8 +5,6 @@ Main FastAPI application for the template.
 import logging
 import secrets
 from datetime import datetime, timezone
-from typing import List
-from contextlib import asynccontextmanager
 import base64
 
 from fastapi import Depends, FastAPI, HTTPException, Security
@@ -21,7 +19,7 @@ from src.models import (
     HealthResponse, SchedulerResponse,
     ObjectListResponse, ObjectUploadRequest, ObjectDownloadResponse
 )
-from src.scheduler import get_scheduler, set_scheduler, BackgroundScheduler
+from src.scheduler import get_scheduler, BackgroundScheduler
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -29,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 # API key authentication
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key")
+
 
 # Initialize FastAPI app
 async def lifespan(app: FastAPI):

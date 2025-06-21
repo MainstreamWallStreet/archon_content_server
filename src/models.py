@@ -2,9 +2,8 @@
 Pydantic models for FastAPI template.
 """
 
-from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 
 
 class ItemBase(BaseModel):
