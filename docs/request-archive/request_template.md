@@ -14,11 +14,6 @@ Implement a REST API for managing customer records, including CRUD operations, f
 ### Additional Context
 The API will be used by internal sales and support staff. All data must be stored securely and comply with GDPR. File uploads should be limited to PDF and image files.
 
-### Priority Level
-- [x] High Priority
-- [ ] Medium Priority  
-- [ ] Low Priority
-
 ## Agent Analysis & Planning
 
 ### Jobs to be Done
