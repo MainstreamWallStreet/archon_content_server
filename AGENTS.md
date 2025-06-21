@@ -286,4 +286,232 @@ AI agents must manage semantic versioning and release notes automatically as par
 - **Documentation:**
   - Reference and link to `docs/release-notes.md` in `README.md` and other relevant documentation.
 
-See `docs/release-notes.md` for the full release history. 
+See `docs/release-notes.md` for the full release history.
+
+## Documentation Standards for AI Agents
+
+### When to Write Documentation
+
+AI agents **must** write or update documentation in the following scenarios:
+
+1. **New Features**: When adding new functionality, endpoints, or capabilities
+2. **Configuration Changes**: When modifying environment variables, settings, or infrastructure
+3. **API Changes**: When adding, modifying, or removing API endpoints
+4. **Infrastructure Updates**: When changing Terraform configurations or deployment processes
+5. **Workflow Changes**: When modifying CI/CD pipelines, testing procedures, or development processes
+6. **Bug Fixes**: When fixing issues that required significant investigation or have workarounds
+7. **Security Updates**: When implementing security measures or addressing vulnerabilities
+8. **Performance Improvements**: When making optimizations that change behavior or requirements
+9. **Breaking Changes**: When making changes that require user action or migration
+10. **User-Facing Changes**: When modifying anything that affects how users interact with the system
+
+### Standard Documentation Format for LLMs
+
+All documentation must follow this standardized format for optimal LLM comprehension and human readability:
+
+```markdown
+# Document Title
+
+Brief one-sentence description of what this document covers.
+
+## Overview
+
+2-3 sentences explaining the purpose, scope, and context of this document. Include why someone would read this and what they'll learn.
+
+## Prerequisites
+
+- **Required**: List of prerequisites that must be completed before proceeding
+- **Optional**: List of helpful but not required prerequisites
+- **Tools**: Required software, CLI tools, or access levels needed
+
+## Quick Start
+
+Step-by-step instructions for the most common use case:
+
+1. **Step 1**: Clear, actionable instruction
+   ```bash
+   # Example command or code
+   ```
+   *Expected output or result*
+
+2. **Step 2**: Next instruction
+   ```bash
+   # Example command or code
+   ```
+   *Expected output or result*
+
+3. **Step 3**: Continue as needed...
+
+## Detailed Instructions
+
+### Section 1: Configuration
+
+Detailed explanation of configuration options:
+
+| Setting | Description | Default | Required |
+|---------|-------------|---------|----------|
+| `SETTING_NAME` | What this setting controls | `default_value` | Yes/No |
+
+**Example Configuration:**
+```yaml
+# Example configuration file
+setting_name: value
+```
+
+### Section 2: Step-by-Step Process
+
+Detailed breakdown of each step:
+
+#### Step 1: Preparation
+- What to do
+- Why it's needed
+- How to verify it worked
+
+#### Step 2: Implementation
+- Specific commands or code
+- Expected outcomes
+- Common issues and solutions
+
+#### Step 3: Verification
+- How to test the implementation
+- What success looks like
+- Troubleshooting tips
+
+## Common Issues and Solutions
+
+### Issue 1: [Descriptive Issue Name]
+
+**Symptoms:**
+- Error message or unexpected behavior
+- When this issue occurs
+
+**Cause:**
+Brief explanation of why this happens
+
+**Solution:**
+```bash
+# Commands to fix the issue
+```
+
+**Prevention:**
+How to avoid this issue in the future
+
+### Issue 2: [Another Issue]
+
+[Follow same format as above]
+
+## Troubleshooting
+
+### Diagnostic Commands
+
+```bash
+# Command to check status
+command_to_run
+
+# Command to verify configuration
+another_command
+```
+
+### Log Locations
+
+- **Application logs**: `/path/to/logs`
+- **System logs**: `/var/log/service`
+- **Error logs**: `/path/to/errors`
+
+### Debug Mode
+
+How to enable debug logging and what to look for:
+
+```bash
+# Enable debug mode
+export DEBUG=true
+```
+
+## Best Practices
+
+- **Practice 1**: Explanation and rationale
+- **Practice 2**: Explanation and rationale
+- **Practice 3**: Explanation and rationale
+
+## Security Considerations
+
+- **Security Point 1**: What to be aware of
+- **Security Point 2**: Best practices for security
+- **Security Point 3**: Potential risks and mitigations
+
+## Performance Notes
+
+- **Performance Consideration 1**: Impact and optimization tips
+- **Performance Consideration 2**: Monitoring recommendations
+- **Performance Consideration 3**: Scaling considerations
+
+## Related Documentation
+
+- **[Related Doc 1](link)**: Brief description
+- **[Related Doc 2](link)**: Brief description
+- **[External Resource](link)**: External reference if applicable
+
+## Changelog
+
+- **Version 1.2.0**: Added new feature X
+- **Version 1.1.0**: Fixed issue Y
+- **Version 1.0.0**: Initial documentation
+```
+
+### Documentation Categories and Placement
+
+AI agents must place documentation in the appropriate category:
+
+#### `docs/deployment/`
+- Deployment guides and procedures
+- Production environment setup
+- Troubleshooting deployment issues
+- Operational procedures
+
+#### `docs/development/`
+- Development environment setup
+- Code quality and testing procedures
+- CI/CD pipeline documentation
+- Release management processes
+
+#### `docs/infrastructure/`
+- Infrastructure configuration
+- Terraform and cloud resource management
+- Environment setup checklists
+- Infrastructure troubleshooting
+
+### Documentation Quality Standards
+
+1. **Clarity**: Use simple, direct language. Avoid jargon unless necessary
+2. **Completeness**: Include all necessary steps, commands, and expected outcomes
+3. **Accuracy**: Test all commands and procedures before documenting
+4. **Consistency**: Use consistent formatting, terminology, and structure
+5. **Actionability**: Every instruction should be immediately actionable
+6. **Verification**: Include ways to verify that steps were completed successfully
+7. **Troubleshooting**: Anticipate common issues and provide solutions
+8. **Context**: Explain why steps are necessary, not just what to do
+
+### Documentation Maintenance
+
+AI agents must:
+
+- **Update existing docs** when making changes that affect documented procedures
+- **Cross-reference** related documentation to maintain consistency
+- **Version documentation** when making significant changes
+- **Remove outdated information** when procedures change
+- **Add examples** for complex procedures
+- **Include error messages** and their solutions
+
+### Documentation Review Checklist
+
+Before finalizing any documentation, AI agents must verify:
+
+- [ ] All commands and code examples are tested and working
+- [ ] Prerequisites are clearly listed and accurate
+- [ ] Step-by-step instructions are complete and in logical order
+- [ ] Expected outcomes are clearly stated
+- [ ] Common issues and solutions are included
+- [ ] Security considerations are addressed
+- [ ] Related documentation is linked
+- [ ] Formatting is consistent with the standard template
+- [ ] Language is clear and accessible to the target audience 

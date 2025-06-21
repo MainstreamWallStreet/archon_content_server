@@ -1,276 +1,335 @@
 # CI/CD Pipeline Documentation
 
+Complete guide to the automated CI/CD pipeline using GitHub Actions and Google Cloud Build.
+
 ## Overview
 
-Zergling uses a modern CI/CD pipeline with GitHub Actions for automated testing and deployment. The pipeline follows a **direct Cloud Run deployment** approach, which is more reliable and appropriate for Cloud Run services than Cloud Deploy.
+This document explains the continuous integration and continuous deployment (CI/CD) pipeline that automatically builds, tests, and deploys the FastAPI application to Google Cloud Platform. The pipeline uses GitHub Actions for orchestration, Cloud Build for container building, and Cloud Run for deployment.
 
-## Pre-commit Hooks
+## Prerequisites
 
-Before code reaches CI, we use **pre-commit hooks** to ensure code quality locally:
+- **Required**: GitHub repository with the project code
+- **Required**: Google Cloud Platform project with billing enabled
+- **Required**: Workload Identity Federation configured
+- **Required**: GitHub repository secrets configured
+- **Optional**: Local Docker installation for testing
+- **Tools**: Git, GitHub account, gcloud CLI
 
-### Setup
+## Quick Start
 
-1. **Install pre-commit** (one-time setup):
+1. **Verify Workflow Files**: Ensure `.github/workflows/` contains the required files
    ```bash
-   pip install pre-commit
-   pre-commit install
+   ls .github/workflows/
+   # Should show: pr-test.yml, deploy.yml
    ```
 
-2. **Configuration**: The `.pre-commit-config.yaml` file defines our hooks:
-   - **Black**: Code formatting
-   - **flake8**: Linting
+2. **Check GitHub Secrets**: Verify required secrets are configured
+   - Go to GitHub repository → Settings → Secrets and variables → Actions
+   - Ensure `WORKLOAD_IDENTITY_PROVIDER` is set
 
-### Usage
-
-- **Automatic**: Every `git commit` runs the hooks automatically
-- **Manual**: Run `pre-commit run --all-files` to check all files
-- **Skip**: Use `git commit --no-verify` to bypass hooks (not recommended)
-
-### Benefits
-
-- **Catch issues early**: Formatting and linting errors are caught before CI
-- **Consistency**: Same checks locally and in CI
-- **Speed**: Faster feedback loop
-- **Team standards**: Everyone's code follows the same rules
-
-## Pipeline Architecture
-
-```
-GitHub Push → GitHub Actions → Cloud Build → Cloud Run
-```
-
-### Components
-
-1. **GitHub Actions Workflows**
-   - `pr-test.yml` - Runs on Pull Requests
-   - `deploy.yml` - Runs on merge to main
-
-2. **Cloud Build**
-   - Builds Docker image
-   - Pushes to Artifact Registry
-   - Deploys directly to Cloud Run
-
-3. **Cloud Run**
-   - Hosts the Zergling API
-   - Auto-scales based on traffic
-   - Integrates with GCP services
-
-## Workflow Details
-
-### PR Testing (`pr-test.yml`)
-
-**Trigger**: Pull Request opened/updated
-
-**Steps**:
-1. **Setup**: Python environment, GCP authentication
-2. **Pre-commit**: Run Black and flake8 via pre-commit hooks
-3. **Test**: Run pytest with coverage
-4. **Report**: Post coverage results as PR comment
-
-**Benefits**:
-- Catches issues before merge
-- Ensures code quality
-- Provides immediate feedback
-- Consistent with local development workflow
-
-### Deployment (`deploy.yml`)
-
-**Trigger**: Merge to main branch
-
-**Steps**:
-1. **Setup**: Python environment, GCP authentication
-2. **Build**: Create Docker image via Cloud Build
-3. **Deploy**: Deploy directly to Cloud Run
-4. **Verify**: Health check and smoke tests
-5. **Notify**: Post deployment summary
-
-**Benefits**:
-- Automated deployment on merge
-- Direct Cloud Run deployment (no Cloud Deploy complexity)
-- Health verification
-- Deployment status reporting
-
-## Why Direct Cloud Run Deployment?
-
-### Advantages over Cloud Deploy
-
-1. **Simplicity**: Direct deployment without intermediate layers
-2. **Reliability**: Fewer failure points
-3. **Speed**: Faster deployment cycles
-4. **Compatibility**: No Skaffold version issues
-5. **Maintenance**: Easier to debug and maintain
-
-### Cloud Deploy Limitations
-
-- **Skaffold Version Issues**: Cloud Deploy uses Skaffold v2.16 which doesn't support Cloud Run natively
-- **Complexity**: Additional abstraction layer adds failure points
-- **Debugging**: Harder to troubleshoot deployment issues
-- **Dependencies**: Relies on Cloud Deploy service availability
-
-## Configuration Files
-
-### GitHub Actions
-
-- `.github/workflows/pr-test.yml` - PR testing workflow
-- `.github/workflows/deploy.yml` - Deployment workflow
-
-### Pre-commit
-
-- `.pre-commit-config.yaml` - Pre-commit hooks configuration
-- `.flake8` - Flake8 linting configuration
-
-### Cloud Build
-
-- `cloudbuild.yaml` - Build and deployment configuration
-- `Dockerfile` - Container definition
-
-### Cloud Run
-
-- `clouddeploy/service.yaml` - Service configuration (for reference)
-- Environment variables and secrets managed via GCP
-
-## Environment Variables
-
-### Required Secrets
-
-- `ZERGLING_API_KEY` - API authentication key
-- `GOOGLE_APPLICATION_CREDENTIALS_JSON` - GCP service account credentials
-
-### Build Variables
-
-- `EXAMPLE_BUCKET` - GCS bucket for data storage
-- `DEBUG` - Debug mode flag
-- `LOG_LEVEL` - Logging level
-
-## Development Workflow
-
-### Local Development
-
-1. **Setup pre-commit hooks** (one-time):
-   ```bash
-   pip install pre-commit
-   pre-commit install
-   ```
-
-2. **Make changes** to your code
-
-3. **Commit changes**:
+3. **Test the Pipeline**: Make a change and push to trigger the pipeline
    ```bash
    git add .
-   git commit -m "feat: add new feature"
-   # Pre-commit hooks run automatically
+   git commit -m "test: CI/CD pipeline"
+   git push origin main
    ```
 
-4. **Push and create PR**:
-   ```bash
-   git push origin feature-branch
+## Detailed Instructions
+
+### Section 1: Pipeline Architecture
+
+#### Overview of the CI/CD Flow
+
+The pipeline consists of two main workflows:
+
+1. **Pull Request Testing** (`pr-test.yml`)
+   - Triggers on pull requests
+   - Runs code quality checks
+   - Executes test suite
+   - Reports results
+
+2. **Production Deployment** (`deploy.yml`)
+   - Triggers on pushes to main branch
+   - Builds Docker image
+   - Deploys to Cloud Run
+   - Verifies deployment
+
+#### Workflow Triggers
+
+| Workflow | Trigger | Purpose | Environment |
+|----------|---------|---------|-------------|
+| `pr-test.yml` | Pull requests | Code quality and testing | Development |
+| `deploy.yml` | Push to main | Production deployment | Production |
+
+### Section 2: Pull Request Testing Workflow
+
+#### Step 1: Code Quality Checks
+
+**File**: `.github/workflows/pr-test.yml`
+
+The PR testing workflow performs the following checks:
+
+1. **Linting**: Runs flake8 to check code style
+   ```yaml
+   - name: Lint with flake8
+     run: |
+       pip install flake8
+       flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
    ```
 
-### CI/CD Flow
+2. **Type Checking**: Runs mypy for type validation
+   ```yaml
+   - name: Type check with mypy
+     run: |
+       pip install mypy
+       mypy src/
+   ```
 
-1. **Code Push**: Developer pushes to feature branch
-2. **PR Created**: GitHub Actions detects PR
-3. **Pre-commit Checks**: Same hooks run in CI
-4. **Tests**: pytest with coverage
-5. **Merge**: If all checks pass
-6. **Deploy**: Automatic deployment to Cloud Run
+3. **Formatting**: Checks code formatting with Black
+   ```yaml
+   - name: Check formatting with Black
+     run: |
+       pip install black
+       black --check src/
+   ```
 
-## Deployment Process
+#### Step 2: Testing
 
-1. **Code Push**: Developer pushes to main branch
-2. **Workflow Trigger**: GitHub Actions detects merge
-3. **Authentication**: Uses Workload Identity for GCP access
-4. **Build**: Cloud Build creates Docker image
-5. **Deploy**: Direct deployment to Cloud Run
-6. **Verify**: Health checks and smoke tests
-7. **Notify**: Deployment status posted to GitHub
+1. **Install Dependencies**: Set up Python environment
+   ```yaml
+   - name: Install dependencies
+     run: |
+       python -m pip install --upgrade pip
+       pip install -r requirements.txt
+   ```
 
-## Monitoring and Debugging
+2. **Run Test Suite**: Execute all tests with coverage
+   ```yaml
+   - name: Run tests
+     run: |
+       pip install pytest pytest-cov
+       pytest --cov=src --cov-report=xml
+   ```
 
-### Deployment Status
+3. **Upload Coverage**: Send coverage reports to GitHub
+   ```yaml
+   - name: Upload coverage to Codecov
+     uses: codecov/codecov-action@v3
+     with:
+       file: ./coverage.xml
+   ```
 
-- Check GitHub Actions tab for workflow status
-- Monitor Cloud Build logs for build issues
-- Verify Cloud Run service status
+### Section 3: Production Deployment Workflow
 
-### Health Checks
+#### Step 1: Authentication Setup
 
-- `/health` endpoint for service health
-- Automatic health monitoring via Cloud Run
-- Manual testing via deployment script
+**File**: `.github/workflows/deploy.yml`
 
-### Logs
+The deployment workflow uses Workload Identity Federation for secure authentication:
 
-- Cloud Run logs in GCP Console
-- GitHub Actions logs for CI/CD issues
-- Application logs via structured logging
-
-## Manual Deployment
-
-For manual deployments or testing:
-
-```bash
-# Test deployment script
-./scripts/test_deployment.sh
-
-# Direct Cloud Run deployment
-gcloud run deploy zergling-api \
-  --image=us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:latest \
-  --region=us-central1 \
-  --platform=managed
+```yaml
+- name: Authenticate to Google Cloud
+  uses: google-github-actions/auth@v1
+  with:
+    workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+    service_account: deploy-zergling-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com
 ```
+
+#### Step 2: Build and Deploy
+
+1. **Build Docker Image**: Create container image with Cloud Build
+   ```yaml
+   - name: Build and push image
+     run: |
+       gcloud builds submit --tag gcr.io/${{ env.PROJECT_ID }}/zergling:${{ github.sha }}
+   ```
+
+2. **Deploy to Cloud Run**: Deploy the application
+   ```yaml
+   - name: Deploy to Cloud Run
+     run: |
+       gcloud run deploy zergling-service \
+         --image gcr.io/${{ env.PROJECT_ID }}/zergling:${{ github.sha }} \
+         --region ${{ env.REGION }} \
+         --platform managed \
+         --allow-unauthenticated
+   ```
+
+3. **Verify Deployment**: Check that the service is healthy
+   ```yaml
+   - name: Verify deployment
+     run: |
+       curl -f ${{ env.SERVICE_URL }}/health
+   ```
+
+### Section 4: Environment Configuration
+
+#### Environment Variables
+
+The workflows use the following environment variables:
+
+| Variable | Description | Source | Required |
+|----------|-------------|--------|----------|
+| `PROJECT_ID` | GCP project ID | Workflow file | Yes |
+| `REGION` | GCP region | Workflow file | Yes |
+| `SERVICE_URL` | Cloud Run service URL | Workflow file | Yes |
+
+#### GitHub Secrets
+
+Required secrets for the pipeline:
+
+| Secret | Description | How to Get | Required |
+|--------|-------------|------------|----------|
+| `WORKLOAD_IDENTITY_PROVIDER` | Workload Identity provider path | Terraform output | Yes |
+
+## Common Issues and Solutions
+
+### Issue 1: Workload Identity Authentication Failure
+
+**Symptoms:**
+- `Error: permission denied for service account`
+- `Error: iam.serviceAccounts.getAccessToken`
+
+**Cause:**
+Missing IAM permissions or incorrect Workload Identity configuration
+
+**Solution:**
+1. Verify the service account has the required IAM role:
+   ```bash
+   gcloud iam service-accounts add-iam-policy-binding \
+     deploy-zergling-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+     --member="principalSet://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/zergling-github-pool-v3/attribute.repository/YOUR_REPO" \
+     --role="roles/iam.workloadIdentityUser"
+   ```
+
+2. Check that the Workload Identity provider path is correct in GitHub secrets
+
+**Prevention:**
+Ensure Terraform creates the IAM binding automatically
+
+### Issue 2: Cloud Build Failures
+
+**Symptoms:**
+- Build fails with Docker errors
+- Image push fails with permission errors
+
+**Cause:**
+Missing Cloud Build permissions or Dockerfile issues
+
+**Solution:**
+1. Ensure the Cloud Build service account has necessary permissions
+2. Verify the Dockerfile is valid and builds locally
+3. Check that the project has the required APIs enabled
+
+**Prevention:**
+Test Docker builds locally before pushing
+
+### Issue 3: Test Failures
+
+**Symptoms:**
+- Tests fail in CI but pass locally
+- Coverage reports are missing
+
+**Cause:**
+Environment differences or missing dependencies
+
+**Solution:**
+1. Ensure all dependencies are in `requirements.txt`
+2. Check that test environment matches local setup
+3. Verify test data and mocks are properly configured
+
+**Prevention:**
+Use consistent Python versions and dependencies
+
+### Issue 4: Deployment Verification Failures
+
+**Symptoms:**
+- Deployment succeeds but health check fails
+- Service URL is incorrect
+
+**Cause:**
+Application not starting properly or configuration issues
+
+**Solution:**
+1. Check Cloud Run logs for application errors
+2. Verify environment variables are set correctly
+3. Test the application locally with the same configuration
+
+**Prevention:**
+Test the application thoroughly before deployment
 
 ## Troubleshooting
 
-### Common Issues
-
-1. **Pre-commit Failures**
-   - Run `pre-commit run --all-files` to see all issues
-   - Fix formatting with `black src/ tests/`
-
-2. **Build Failures**
-   - Check Dockerfile syntax
-   - Verify dependencies in requirements.txt
-   - Review Cloud Build logs
-
-3. **Deployment Failures**
-   - Verify GCP permissions
-   - Check service account configuration
-   - Review Cloud Run logs
-
-4. **Health Check Failures**
-   - Verify application startup
-   - Check environment variables
-   - Review application logs
-
-### Debug Commands
+### Diagnostic Commands
 
 ```bash
+# Check GitHub Actions status
+# Go to Actions tab in your repository
+
+# Check Cloud Build logs
+gcloud builds list --limit=10
+
 # Check Cloud Run service status
-gcloud run services describe zergling-api --region=us-central1
+gcloud run services describe zergling-service --region=us-central1
 
-# View recent logs
+# Check application logs
 gcloud logs read "resource.type=cloud_run_revision" --limit=50
+```
 
-# Test health endpoint
-curl https://zergling-api-455624753981.us-central1.run.app/health
+### Log Locations
 
-# Run pre-commit manually
-pre-commit run --all-files
+- **GitHub Actions logs**: Available in the Actions tab of your repository
+- **Cloud Build logs**: `gcloud builds list`
+- **Cloud Run logs**: `gcloud logs read "resource.type=cloud_run_revision"`
+- **Application logs**: Available in Cloud Run console
+
+### Debug Mode
+
+Enable verbose logging for troubleshooting:
+
+```yaml
+# Add to workflow for debugging
+- name: Debug information
+  run: |
+    echo "GitHub SHA: ${{ github.sha }}"
+    echo "Project ID: ${{ env.PROJECT_ID }}"
+    echo "Region: ${{ env.REGION }}"
 ```
 
 ## Best Practices
 
-1. **Always use pre-commit hooks** before pushing code
-2. **Test on PRs** before merging to main
-3. **Monitor deployment logs** for issues
-4. **Use semantic versioning** for releases
-5. **Keep secrets secure** and rotate regularly
-6. **Monitor costs** and optimize resource usage
+- **Test Locally**: Always test changes locally before pushing
+- **Small Changes**: Make small, focused changes to reduce failure risk
+- **Monitor Logs**: Regularly check pipeline logs for issues
+- **Rollback Plan**: Have a plan for rolling back failed deployments
+- **Security**: Use Workload Identity Federation instead of service account keys
+- **Documentation**: Keep pipeline documentation up to date
 
-## Future Enhancements
+## Security Considerations
 
-- **Multi-environment support** (dev, staging, prod)
-- **Blue-green deployments** for zero-downtime updates
-- **Advanced monitoring** with Cloud Monitoring
-- **Automated rollbacks** on health check failures 
+- **Workload Identity**: Use Workload Identity Federation for secure authentication
+- **IAM Permissions**: Follow principle of least privilege for service accounts
+- **Secrets Management**: Store sensitive data in GitHub secrets
+- **Image Security**: Scan Docker images for vulnerabilities
+- **Access Control**: Limit who can trigger deployments
+
+## Performance Notes
+
+- **Build Optimization**: Use Docker layer caching to speed up builds
+- **Parallel Jobs**: Run independent jobs in parallel when possible
+- **Resource Limits**: Set appropriate resource limits for Cloud Run
+- **Monitoring**: Monitor pipeline execution times and optimize slow steps
+
+## Related Documentation
+
+- **[Pipeline Setup](pipeline-setup.md)**: Detailed setup instructions for the CI/CD pipeline
+- **[Deployment Guide](../deployment/deploy.md)**: Complete deployment instructions
+- **[Troubleshooting Guide](../deployment/deployment_errors.md)**: Common deployment issues
+- **[Infrastructure Overview](../infrastructure/README.md)**: Infrastructure documentation
+- **[GitHub Actions Documentation](https://docs.github.com/en/actions)**: Official GitHub Actions documentation
+
+## Changelog
+
+- **Version 1.2.0**: Updated to follow standard documentation format
+- **Version 1.1.0**: Added comprehensive troubleshooting section
+- **Version 1.0.0**: Initial CI/CD documentation 

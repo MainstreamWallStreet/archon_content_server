@@ -1,154 +1,302 @@
-# Configuration Checklist for New Project Setup
+# Configuration Checklist
 
-This checklist covers every variable and configuration you must change when adapting this repository to a new project. It is based on all Terraform files and deployment/test scripts in the `infra/` and `scripts/` directories.
+Comprehensive checklist for adapting the Zergling FastAPI Server Template to a new project or environment.
 
----
+## Overview
 
-## 1. GCP Project and Region
-- **project** (terraform.tfvars):
-  - Set to your new GCP project ID (e.g., `my-new-gcp-project`).
-  - Must match the project where you have billing and APIs enabled.
-- **region** (terraform.tfvars):
-  - Set to your preferred GCP region (e.g., `us-central1`).
-  - All resources will be created in this region.
+This checklist covers every configuration value, variable, and setting that must be updated when adapting this template for a new project. Following this checklist ensures a successful deployment without common configuration mistakes that can cause authentication issues, deployment failures, or security problems.
 
-**Common Mistake:**
-- Using a project ID that does not exist or is not enabled for billing/APIs.
+## Prerequisites
 
----
+- **Required**: Google Cloud Platform account with billing enabled
+- **Required**: GitHub repository for your project
+- **Required**: gcloud CLI installed and authenticated
+- **Required**: Terraform installed locally
+- **Optional**: Docker installed for local testing
+- **Tools**: Git, Python 3.11+, gcloud CLI, Terraform
 
-## 2. GitHub Repository Identity (Workload Identity)
-- **github_owner** (terraform.tfvars):
-  - Set to your GitHub username or organization (e.g., `my-org`).
-- **github_repo** (terraform.tfvars):
-  - Set to your repository name (e.g., `my-fastapi-server`).
+## Quick Start
 
-**Common Mistake:**
-- Not updating these values, causing GitHub Actions authentication to fail.
+1. **Update Project Variables**: Modify Terraform variables for your project
+   ```bash
+   # Edit infra/terraform.tfvars
+   project_id = "your-new-project-id"
+   region = "us-central1"
+   github_repo = "your-username/your-repo-name"
+   ```
 
----
+2. **Update Script Variables**: Modify deployment scripts
+   ```bash
+   # Edit scripts/setup_local_dev.sh
+   PROJECT_ID="your-new-project-id"
+   ```
 
-## 3. Service Accounts (Manual Prerequisite)
-- **cloud-run-zergling-sa** and **deploy-zergling-sa** must exist in your GCP project **before** running Terraform.
-  - Create with:
-    ```bash
-    gcloud iam service-accounts create cloud-run-zergling-sa --display-name="Cloud Run Service Account"
-    gcloud iam service-accounts create deploy-zergling-sa --display-name="Deploy Service Account"
-    ```
-- Update any references if you use different names.
+3. **Deploy Infrastructure**: Apply Terraform configuration
+   ```bash
+   cd infra
+   terraform init
+   terraform plan
+   terraform apply
+   ```
 
-**Common Mistake:**
-- Forgetting to create these service accounts before running `terraform apply`.
+## Detailed Instructions
 
----
+### Section 1: Terraform Configuration
 
-## 4. Docker Image and Artifact Registry
-- **image** (terraform.tfvars):
-  - Set to your Docker image path (e.g., `gcr.io/<your-project>/<your-image>:latest`).
-- **repository_id** (main.tf):
-  - Change from `zergling` to your preferred repository name if desired.
+#### Step 1: Update Terraform Variables
 
-**Common Mistake:**
-- Using the default image path, which may not exist in your project.
+**File**: `infra/terraform.tfvars`
 
----
+| Variable | Description | Example | Required |
+|----------|-------------|---------|----------|
+| `project_id` | Your GCP project ID | `"my-new-project"` | Yes |
+| `region` | GCP region for resources | `"us-central1"` | Yes |
+| `github_repo` | GitHub repository name | `"username/repo-name"` | Yes |
+| `environment` | Environment name | `"production"` | Yes |
 
-## 5. Secrets and Sensitive Values
-- **zergling_api_key** (terraform.tfvars):
-  - Set to your actual API key (never commit real secrets to version control).
-- **google_sa_value** (terraform.tfvars):
-  - Set to the JSON of your GCP service account (for local/dev use only; use Workload Identity in CI/CD).
-- **zergling_web_password** (terraform.tfvars):
-  - Set to a secure password for your web interface.
-- **alert_from_email** (terraform.tfvars):
-  - Set to the sender email for alerts.
-- **alert_recipients** (terraform.tfvars):
-  - List of emails to receive alerts.
+**Example Configuration:**
+```hcl
+project_id = "my-new-project-123"
+region = "us-central1"
+github_repo = "myusername/my-fastapi-app"
+environment = "production"
+```
 
-**Common Mistake:**
-- Leaving default or placeholder secrets in place.
+#### Step 2: Update Terraform Backend
 
----
+**File**: `infra/backend.tf`
 
-## 6. Storage Buckets
-- **earnings_bucket** (terraform.tfvars):
-  - Name for the earnings data bucket (e.g., `myapp-earnings`).
-- **email_queue_bucket** (terraform.tfvars):
-  - Name for the email queue bucket (e.g., `myapp-email-queue`).
-- **example_bucket** (terraform.tfvars):
-  - Name for a general-purpose bucket (e.g., `myapp-example-bucket`).
+Update the backend configuration for your project:
 
-**Common Mistake:**
-- Not creating or updating bucket names, leading to missing resources at runtime.
+```hcl
+terraform {
+  backend "gcs" {
+    bucket = "my-new-project-terraform-state"
+    prefix = "terraform/state"
+  }
+}
+```
 
----
+#### Step 3: Update Resource Names
 
-## 7. Admin and Contact Info
-- **admin_phone** (terraform.tfvars):
-  - Set to your admin's phone number.
-- **alert_from_email** and **alert_recipients** (terraform.tfvars):
-  - Set to your team's real emails.
+**File**: `infra/main.tf`
 
----
+Update resource names to match your project:
 
-## 8. Script Variables (for Local/Manual Testing)
-- **PROJECT_ID, REGION, SERVICE_NAME** in `scripts/test_deployment.sh`:
-  - Update to match your new project, region, and service name.
-- **API_KEY, BASE_URL** in `scripts/test_api.sh`:
-  - Set to your deployed API key and service URL.
-- **CRED_PATH, ZERGLING_API_KEY, EXAMPLE_BUCKET** in `scripts/setup_zergling.sh`:
-  - Update as needed for your local environment.
+| Resource | Current Name | New Name | Notes |
+|----------|--------------|----------|-------|
+| Cloud Run Service | `zergling-service` | `your-app-service` | Must be unique |
+| GCS Bucket | `zergling-data` | `your-app-data` | Must be globally unique |
+| Service Account | `cloud-run-zergling-sa` | `cloud-run-your-app-sa` | Must be unique |
+| Workload Identity Pool | `zergling-github-pool` | `your-app-github-pool` | Must be unique |
 
-**Common Mistake:**
-- Forgetting to update script variables, causing tests or deployments to run against the wrong project or fail.
+### Section 2: Script Configuration
 
----
+#### Step 1: Update Local Development Script
 
-## 9. Workload Identity Provider (Terraform)
-- **attribute_condition** in `main.tf`:
-  - Should match your GitHub repo: `attribute.repository == "<github_owner>/<github_repo>"`
+**File**: `scripts/setup_local_dev.sh`
 
-**Common Mistake:**
-- Not updating this, causing GitHub Actions authentication to fail.
+Update the following variables:
 
----
+```bash
+PROJECT_ID="your-new-project-id"
+SERVICE_ACCOUNT_NAME="cloud-run-your-app-sa"
+BUCKET_NAME="your-app-data"
+```
 
-## 10. Backend State Storage (Optional)
-- If you use remote state, update `backend.tf` to use your own GCS bucket and prefix.
+#### Step 2: Update Test Scripts
 
----
+**File**: `scripts/test_deployment.sh`
 
-## 11. Outputs and Documentation
-- **outputs.tf**: Review outputs for any project-specific values you want to expose.
-- **docs/**: Update documentation to reflect your new project name, buckets, and secrets.
+Update service names and URLs:
 
----
+```bash
+SERVICE_NAME="your-app-service"
+SERVICE_URL="https://your-app-service-xxx-uc.a.run.app"
+```
 
-## Common Pitfalls and Debugging
-- **Service Account Not Found:**
-  - Ensure service accounts exist before running Terraform.
-- **Permission Denied:**
-  - Check IAM roles for all service accounts.
-- **Secret Not Found:**
-  - Make sure all secrets are created and accessible.
-- **Build/Deploy Failures:**
-  - Check Docker image path, bucket names, and service account permissions.
-- **Workload Identity Fails:**
-  - Double-check `github_owner` and `github_repo` in both Terraform and GitHub secrets.
-- **GCS Bucket Issues:**
-  - Buckets must exist and be accessible by the Cloud Run service account.
-- **Health Check Fails:**
-  - Ensure the deployed service is running and accessible at the expected URL.
+### Section 3: Application Configuration
 
----
+#### Step 1: Update Environment Variables
 
-## Final Checklist Before First Deploy
-- [ ] All variables in `terraform.tfvars` updated for your project
-- [ ] Service accounts created in GCP
-- [ ] All script variables updated
-- [ ] All secrets set in Secret Manager
-- [ ] Buckets created or names updated
-- [ ] Workload Identity provider matches your repo
-- [ ] Documentation updated
-- [ ] Initial `terraform apply` completes without error
-- [ ] Test deployment and health check pass 
+**File**: `sample.env`
+
+Update the following variables:
+
+| Variable | Description | Example | Required |
+|----------|-------------|---------|----------|
+| `GOOGLE_CLOUD_PROJECT` | Your GCP project ID | `"my-new-project"` | Yes |
+| `EXAMPLE_BUCKET` | Your GCS bucket name | `"my-app-data"` | Yes |
+| `ZERGLING_API_KEY` | Your API key | `"your-secret-api-key"` | Yes |
+
+#### Step 2: Update Docker Configuration
+
+**File**: `Dockerfile`
+
+Verify the Dockerfile is appropriate for your application:
+
+```dockerfile
+# Update if you have different requirements
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+```
+
+### Section 4: GitHub Actions Configuration
+
+#### Step 1: Update Workflow Files
+
+**File**: `.github/workflows/deploy.yml`
+
+Update the following values:
+
+```yaml
+env:
+  PROJECT_ID: your-new-project-id
+  REGION: us-central1
+  SERVICE_NAME: your-app-service
+```
+
+#### Step 2: Update Test Workflow
+
+**File**: `.github/workflows/pr-test.yml`
+
+Verify the workflow is appropriate for your project structure.
+
+## Common Issues and Solutions
+
+### Issue 1: Resource Name Conflicts
+
+**Symptoms:**
+- `Error: googleapi: Error 409: Already exists`
+- `Error: googleapi: Error 400: Invalid value`
+
+**Cause:**
+Resource names are not globally unique or contain invalid characters
+
+**Solution:**
+1. Use unique, project-specific names for all resources
+2. Avoid special characters in resource names
+3. Use lowercase letters, numbers, and hyphens only
+
+**Prevention:**
+Always prefix resource names with your project identifier
+
+### Issue 2: GitHub Repository Mismatch
+
+**Symptoms:**
+- `Error: workload identity provider not found`
+- `Error: permission denied for repository`
+
+**Cause:**
+GitHub repository name in Terraform doesn't match actual repository
+
+**Solution:**
+1. Update `github_repo` variable in `terraform.tfvars`
+2. Re-run `terraform apply`
+3. Update GitHub secrets with new provider path
+
+**Prevention:**
+Double-check repository name format: `username/repo-name`
+
+### Issue 3: GCP Project Permissions
+
+**Symptoms:**
+- `Error: googleapi: Error 403: Permission denied`
+- `Error: failed to get current user`
+
+**Cause:**
+Insufficient permissions or wrong project configuration
+
+**Solution:**
+1. Verify gcloud authentication: `gcloud auth list`
+2. Set correct project: `gcloud config set project YOUR_PROJECT_ID`
+3. Ensure you have Owner or Editor role on the project
+
+**Prevention:**
+Always verify gcloud configuration before running Terraform
+
+### Issue 4: Service Account Key Issues
+
+**Symptoms:**
+- `Error: could not find default credentials`
+- `Error: invalid_grant`
+
+**Cause:**
+Service account key not properly configured or expired
+
+**Solution:**
+1. Use Workload Identity Federation instead of service account keys
+2. For local development, download fresh service account key
+3. Update `GOOGLE_APPLICATION_CREDENTIALS` environment variable
+
+**Prevention:**
+Use Workload Identity Federation for production deployments
+
+## Troubleshooting
+
+### Diagnostic Commands
+
+```bash
+# Check gcloud configuration
+gcloud config list
+
+# Check Terraform state
+terraform show
+
+# Check GCP project permissions
+gcloud projects get-iam-policy YOUR_PROJECT_ID
+
+# Check service account permissions
+gcloud iam service-accounts get-iam-policy \
+  cloud-run-your-app-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com
+```
+
+### Verification Checklist
+
+After completing the configuration, verify:
+
+- [ ] Terraform applies successfully without errors
+- [ ] All GCP resources are created with correct names
+- [ ] GitHub Actions can authenticate with GCP
+- [ ] Local development environment works
+- [ ] Application deploys successfully
+- [ ] Health checks pass
+- [ ] API endpoints respond correctly
+
+## Best Practices
+
+- **Unique Names**: Always use unique, project-specific names for all resources
+- **Environment Separation**: Use different projects or prefixes for different environments
+- **Documentation**: Document any customizations made to the template
+- **Testing**: Test the complete setup before going to production
+- **Backup**: Keep backups of your Terraform state and configuration
+- **Security**: Review IAM permissions and follow principle of least privilege
+
+## Security Considerations
+
+- **Service Account Permissions**: Ensure service accounts have minimal required permissions
+- **Secret Management**: Use Secret Manager for all sensitive configuration
+- **API Keys**: Generate secure, random API keys and rotate them regularly
+- **Network Security**: Configure VPC and firewall rules as needed
+- **Audit Logging**: Enable audit logs for all GCP services
+
+## Performance Notes
+
+- **Resource Sizing**: Start with recommended resource sizes and adjust based on usage
+- **Scaling**: Configure appropriate scaling parameters for your workload
+- **Monitoring**: Set up monitoring and alerting for your application
+- **Cost Optimization**: Monitor costs and optimize resource usage
+
+## Related Documentation
+
+- **[Infrastructure Overview](README.md)**: Detailed infrastructure documentation
+- **[Deployment Guide](../deployment/deploy.md)**: Complete deployment instructions
+- **[Troubleshooting Guide](../deployment/deployment_errors.md)**: Common deployment issues
+- **[Local Development Setup](../../README.md#local-development-setup)**: Setting up local development
+- **[Google Cloud Documentation](https://cloud.google.com/docs)**: Official GCP documentation
+
+## Changelog
+
+- **Version 1.2.0**: Updated to follow standard documentation format
+- **Version 1.1.0**: Added comprehensive troubleshooting section
+- **Version 1.0.0**: Initial configuration checklist 
