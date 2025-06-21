@@ -51,6 +51,93 @@ A production-ready FastAPI server template with GCP integration, API key auth, G
    - Documentation: http://localhost:8080/docs
    - Health Check: http://localhost:8080/health
 
+## Local Development Setup
+
+### Quick Setup (Recommended)
+
+For the easiest setup, use our automated script:
+
+```bash
+# Make sure you're authenticated with gcloud and have infrastructure deployed
+./scripts/setup_local_dev.sh
+```
+
+This script will:
+- Check your gcloud authentication
+- Verify infrastructure is deployed
+- Download the service account key
+- Generate an API key
+- Create your `.env` file
+- Test the setup
+
+### Manual Setup
+
+If you prefer to set up manually or the automated script doesn't work for your environment:
+
+### Prerequisites for Local Development
+
+Before running the application locally, you need to set up GCP authentication:
+
+1. **Install and authenticate gcloud CLI:**
+   ```bash
+   # Install gcloud CLI (if not already installed)
+   # Follow: https://cloud.google.com/sdk/docs/install
+   
+   # Authenticate with your GCP account
+   gcloud auth login
+   gcloud config set project YOUR_PROJECT_ID
+   ```
+
+2. **Deploy infrastructure first:**
+   ```bash
+   cd infra
+   terraform init
+   terraform plan
+   terraform apply
+   ```
+
+3. **Create service account key for local development:**
+   ```bash
+   # Create a directory for your credentials
+   mkdir -p ~/.config/gcp
+   
+   # Download the service account key
+   gcloud iam service-accounts keys create ~/.config/gcp/zergling-sa.json \
+     --iam-account=cloud-run-zergling-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com
+   ```
+
+4. **Configure your .env file:**
+   ```bash
+   cp sample.env .env
+   # Edit .env and update these values:
+   # - GOOGLE_CLOUD_PROJECT=your-actual-project-id
+   # - GOOGLE_APPLICATION_CREDENTIALS=/Users/yourusername/.config/gcp/zergling-sa.json
+   # - EXAMPLE_BUCKET=your-actual-bucket-name (from terraform output)
+   # - ZERGLING_API_KEY=your-secret-api-key
+   ```
+
+### Environment Variables for Local Development
+
+| Variable | Description | How to Set | Required For |
+|:---|:---|:---|:---|
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to service account JSON file | Download from GCP Console or use gcloud command above | Local Dev Only |
+| `GOOGLE_CLOUD_PROJECT` | Your GCP project ID | Use your actual project ID | Both |
+| `EXAMPLE_BUCKET` | GCS bucket name | Get from `terraform output` after running `terraform apply` | Both |
+| `ZERGLING_API_KEY` | API key for authentication | Create a secure random string | Both |
+
+### Testing Local Setup
+
+```bash
+# Test that your credentials work
+python -c "from google.cloud import storage; client = storage.Client(); print('✅ GCP authentication working')"
+
+# Test the application
+python run.py
+
+# In another terminal, test the API
+curl http://localhost:8080/health
+```
+
 ## Setup Checklist
 
 ### Prerequisites
@@ -220,16 +307,16 @@ gcloud projects get-iam-policy YOUR_PROJECT_ID \
 
 The application uses the following environment variables. For local development, you can set them in a `.env` file. In production on Cloud Run, these are set via a combination of Secret Manager and the service's configuration.
 
-| Variable | Description | Default / Example | Used In |
-|:---|:---|:---|:---|
-| `APP_NAME` | The name of the application. | `zergling` | App |
-| `LOG_LEVEL` | The logging level for the application. | `INFO` | App |
-| `DEBUG` | Enables or disables debug mode. | `false` | App, Cloud Build |
-| `ENV` | The deployment environment. | `dev` | App |
-| `ZERGLING_API_KEY` | The secret API key for authentication. | `your-secret-api-key` | App (via Secret Manager) |
-| `GOOGLE_CLOUD_PROJECT`| Your Google Cloud Project ID. | `your-gcp-project-id` | App, Terraform |
-| `EXAMPLE_BUCKET` | The GCS bucket for data storage. | `your-gcs-bucket-name`| App, Cloud Build |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to the GCP service account JSON file. | `/path/to/creds.json`| Local Dev Only |
+| Variable | Description | Default / Example | Used In | Required For |
+|:---|:---|:---|:---|:---|
+| `APP_NAME` | The name of the application. | `zergling` | App | Both |
+| `LOG_LEVEL` | The logging level for the application. | `INFO` | App | Both |
+| `DEBUG` | Enables or disables debug mode. | `false` | App, Cloud Build | Both |
+| `ENV` | The deployment environment. | `dev` | App | Both |
+| `ZERGLING_API_KEY` | The secret API key for authentication. | `your-secret-api-key` | App (via Secret Manager) | Both |
+| `GOOGLE_CLOUD_PROJECT`| Your Google Cloud Project ID. | `your-gcp-project-id` | App, Terraform | Both |
+| `EXAMPLE_BUCKET` | The GCS bucket for data storage. | `your-gcs-bucket-name`| App, Cloud Build | Both |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to the GCP service account JSON file. | `/path/to/creds.json`| Local Dev Only | Local Dev Only |
 
 ### GCP Setup
 
