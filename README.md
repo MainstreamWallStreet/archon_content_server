@@ -218,14 +218,18 @@ gcloud projects get-iam-policy YOUR_PROJECT_ID \
 
 ### Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `APP_NAME` | Application name | Yes |
-| `API_KEY` | API authentication key | Yes |
-| `GOOGLE_CLOUD_PROJECT` | GCP project ID | Yes |
-| `GOOGLE_SA_VALUE` | Service account JSON | Yes |
-| `STORAGE_BUCKET` | GCS bucket for data | Yes |
-| `ENV` | Environment (dev/staging/prod) | Yes |
+The application uses the following environment variables. For local development, you can set them in a `.env` file. In production on Cloud Run, these are set via a combination of Secret Manager and the service's configuration.
+
+| Variable | Description | Default / Example | Used In |
+|:---|:---|:---|:---|
+| `APP_NAME` | The name of the application. | `zergling` | App |
+| `LOG_LEVEL` | The logging level for the application. | `INFO` | App |
+| `DEBUG` | Enables or disables debug mode. | `false` | App, Cloud Build |
+| `ENV` | The deployment environment. | `dev` | App |
+| `ZERGLING_API_KEY` | The secret API key for authentication. | `your-secret-api-key` | App (via Secret Manager) |
+| `GOOGLE_CLOUD_PROJECT`| Your Google Cloud Project ID. | `your-gcp-project-id` | App, Terraform |
+| `EXAMPLE_BUCKET` | The GCS bucket for data storage. | `your-gcs-bucket-name`| App, Cloud Build |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to the GCP service account JSON file. | `/path/to/creds.json`| Local Dev Only |
 
 ### GCP Setup
 
