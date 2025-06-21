@@ -89,79 +89,34 @@ jobs:
             fi
           done
 
-      - name: Create Deployment Summary
-        uses: actions/github-script@v7
+      - name: Deployment Summary
         if: success()
-        with:
-          script: |
-            const { data: commits } = await github.rest.repos.compareCommits({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              base: context.payload.before,
-              head: context.payload.after
-            });
-            
-            const commitMessages = commits.commits
-              .map(commit => `- ${commit.commit.message.split('\n')[0]}`)
-              .join('\n');
-            
-            const summary = `## 🚀 Deployment Summary
-            
-            **Status**: ✅ Successfully deployed to production
-            
-            **Service**: ${{ env.SERVICE_NAME }}
-            **Region**: ${{ env.REGION }}
-            **URL**: ${{ steps.service-url.outputs.url }}
-            
-            **Deployment Steps**:
-            - Cloud Build: ✅ SUCCESS
-            - Cloud Run Deployment: ✅ SUCCESS
-            - Health Check: ✅ PASSED
-            
-            **Changes in this deployment**:
-            ${commitMessages}
-            
-            ---
-            *Deployed via GitHub Actions at ${new Date().toISOString()}*`;
-            
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: summary
-            });
+        run: |
+          echo "## 🚀 Deployment Summary"
+          echo "**Status**: ✅ Successfully deployed to production"
+          echo "**Service**: ${{ env.SERVICE_NAME }}"
+          echo "**Region**: ${{ env.REGION }}"
+          echo "**URL**: ${{ steps.service-url.outputs.url }}"
+          echo ""
+          echo "**Deployment Steps**:"
+          echo "- Cloud Build: ✅ SUCCESS"
+          echo "- Cloud Run Deployment: ✅ SUCCESS"
+          echo "- Health Check: ✅ PASSED"
 
-      - name: Create Failure Summary
-        uses: actions/github-script@v7
+      - name: Failure Summary
         if: failure()
-        with:
-          script: |
-            const buildStatus = '${{ steps.build-deploy.outcome }}' === 'success' ? '✅ SUCCESS' : '❌ FAILED';
-            const deployStatus = '${{ steps.service-url.outcome }}' === 'success' ? '✅ SUCCESS' : '❌ FAILED';
-            const healthStatus = '${{ steps.verify.outcome }}' === 'success' ? '✅ PASSED' : '❌ FAILED';
-            
-            const summary = `## ❌ Deployment Failed
-            
-            **Service**: ${{ env.SERVICE_NAME }}
-            **Region**: ${{ env.REGION }}
-            
-            **Failure Details**:
-            - Cloud Build: ${buildStatus}
-            - Cloud Run Deployment: ${deployStatus}
-            - Health Check: ${healthStatus}
-            
-            **Next Steps**:
-            1. Check the GitHub Actions logs for detailed error information
-            2. Verify GCP service account permissions
-            3. Check Cloud Build and Cloud Run logs in GCP Console
-            4. Test deployment manually using \`./scripts/test_deployment.sh\`
-            
-            ---
-            *Deployment failed via GitHub Actions at ${new Date().toISOString()}*`;
-            
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: summary
-            }); 
+        run: |
+          echo "## ❌ Deployment Failed"
+          echo "**Service**: ${{ env.SERVICE_NAME }}"
+          echo "**Region**: ${{ env.REGION }}"
+          echo ""
+          echo "**Failure Details**:"
+          echo "- Cloud Build: ${{ steps.build-deploy.outcome == 'success' && '✅ SUCCESS' || '❌ FAILED' }}"
+          echo "- Cloud Run Deployment: ${{ steps.service-url.outcome == 'success' && '✅ SUCCESS' || '❌ FAILED' }}"
+          echo "- Health Check: ${{ steps.verify.outcome == 'success' && '✅ PASSED' || '❌ FAILED' }}"
+          echo ""
+          echo "**Next Steps**:"
+          echo "1. Check the GitHub Actions logs for detailed error information"
+          echo "2. Verify GCP service account permissions"
+          echo "3. Check Cloud Build and Cloud Run logs in GCP Console"
+          echo "4. Test deployment manually using \`./scripts/test_deployment.sh\` 
