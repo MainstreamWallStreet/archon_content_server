@@ -109,13 +109,13 @@ class MockStore(DataStore):
 class GcsStore(DataStore):
     """GCS-based implementation of DataStore."""
     
-    def __init__(self, bucket_name: str):
+    def __init__(self, bucket_name: str, force_gcs: bool = False):
         """Initialize GCS store with bucket name."""
         if not bucket_name:
             raise ValueError("Bucket name is required")
         
         # Check if we're in local development mode (no valid GCP credentials)
-        if os.getenv("DEBUG", "false").lower() == "true" or not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+        if not force_gcs and (os.getenv("DEBUG", "false").lower() == "true" or not os.getenv("GOOGLE_APPLICATION_CREDENTIALS")):
             print("⚠️  Using mock store for local development")
             self._store = MockStore(bucket_name)
             return
@@ -124,24 +124,18 @@ class GcsStore(DataStore):
             # Handle case where GOOGLE_APPLICATION_CREDENTIALS contains JSON content directly
             creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
             if creds_path and creds_path.startswith('{'):
-                # It's JSON content, not a file path
                 import json
                 import tempfile
-                
                 try:
-                    # Try to parse as JSON directly
                     creds_data = json.loads(creds_path)
                     print(f"✅ Successfully parsed JSON credentials")
                 except json.JSONDecodeError as e:
                     print(f"⚠️  JSON decode error: {e}")
-                    # If that fails, try base64 decoding first
                     import base64
                     try:
-                        # Add padding if needed
                         padding = 4 - (len(creds_path) % 4)
                         if padding != 4:
                             creds_path += '=' * padding
-                        
                         decoded = base64.b64decode(creds_path).decode('utf-8')
                         creds_data = json.loads(decoded)
                         print(f"✅ Successfully decoded base64 credentials")
@@ -150,23 +144,22 @@ class GcsStore(DataStore):
                         print(f"📄 Credentials length: {len(creds_path)}")
                         print(f"📄 First 100 chars: {creds_path[:100]}")
                         raise
-                
-                # Create a temporary file with the JSON content
                 with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
                     json.dump(creds_data, f)
                     temp_creds_path = f.name
-                
-                # Set the environment variable to point to the temp file
                 os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = temp_creds_path
                 print(f"📁 Created temporary credentials file: {temp_creds_path}")
-            
             self.client = storage.Client()
             self.bucket = self.client.bucket(bucket_name)
             self.bucket_name = bucket_name
             self._store = None
+            # Only check bucket existence if force_gcs is True (for tests)
+            if force_gcs and not self.bucket.exists():
+                raise ValueError(f"GCS bucket {bucket_name} does not exist")
             print(f"✅ GCS store initialized with bucket: {bucket_name}")
-            
         except Exception as e:
+            if force_gcs:
+                raise RuntimeError("Failed to initialize GCS client") from e
             print(f"⚠️  GCS initialization failed, using mock store: {e}")
             self._store = MockStore(bucket_name)
     

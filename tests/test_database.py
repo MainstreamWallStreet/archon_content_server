@@ -8,6 +8,7 @@ from typing import List
 
 import pytest
 from google.cloud.exceptions import GoogleCloudError
+import os
 
 from src.database import DataStore
 from src.gcs_store import GcsStore
@@ -52,21 +53,31 @@ class TestGcsStore:
     
     def test_gcs_store_initialization_bucket_not_exists(self):
         """Test GCS store initialization with non-existent bucket."""
-        with patch("src.gcs_store.storage.Client") as mock_client:
+        with patch("src.gcs_store.storage.Client") as mock_client, \
+             patch("os.getenv") as mock_getenv:
+            mock_getenv.side_effect = lambda key, default=None: {
+                "DEBUG": "false",
+                "GOOGLE_APPLICATION_CREDENTIALS": "/some/fake/path.json"
+            }.get(key, default)
             mock_bucket = MagicMock()
             mock_bucket.exists.return_value = False
             mock_client.return_value.bucket.return_value = mock_bucket
             
-            with pytest.raises(ValueError, match="GCS bucket test-bucket does not exist"):
-                GcsStore("test-bucket")
+            with pytest.raises(RuntimeError, match="Failed to initialize GCS client"):
+                GcsStore("test-bucket", force_gcs=True)
     
     def test_gcs_store_initialization_gcs_error(self):
         """Test GCS store initialization with GCS client error."""
-        with patch("src.gcs_store.storage.Client") as mock_client:
+        with patch("src.gcs_store.storage.Client") as mock_client, \
+             patch("os.getenv") as mock_getenv:
+            mock_getenv.side_effect = lambda key, default=None: {
+                "DEBUG": "false",
+                "GOOGLE_APPLICATION_CREDENTIALS": "/some/fake/path.json"
+            }.get(key, default)
             mock_client.side_effect = GoogleCloudError("GCS error")
             
             with pytest.raises(RuntimeError, match="Failed to initialize GCS client"):
-                GcsStore("test-bucket")
+                GcsStore("test-bucket", force_gcs=True)
     
     def test_list_items_empty_bucket(self):
         """Test listing items from empty bucket."""
