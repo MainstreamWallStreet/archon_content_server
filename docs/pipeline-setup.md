@@ -7,7 +7,7 @@ This document provides a step-by-step guide to understanding and configuring the
 The CI/CD process is split into two main workflows:
 
 1.  **Pull Request Testing (`pr-test.yml`)**: This workflow runs automatically on every pull request that targets the `main` branch. Its job is to ensure code quality and prevent bugs from being introduced. It performs:
-    *   **Pre-commit checks** (Black, isort, flake8) - Same as local development
+    *   **Pre-commit checks** (Black, flake8) - Same as local development
     *   Unit and integration testing (with `pytest`)
     *   Code coverage reporting (with `Codecov`)
     *   It posts a comment on the PR with the test results.
@@ -37,7 +37,6 @@ pre-commit install
 
 The `.pre-commit-config.yaml` file is already configured with:
 - **Black** (v24.10.0): Code formatting
-- **isort** (v5.13.2): Import sorting  
 - **flake8** (v7.0.0): Linting
 
 ### 3. Usage
@@ -110,7 +109,7 @@ Here's the complete development workflow with pre-commit hooks:
 ### CI/CD Flow
 
 1. **PR Created**: GitHub Actions detects PR
-2. **Pre-commit Checks**: Same hooks run in CI (Black, isort, flake8)
+2. **Pre-commit Checks**: Same hooks run in CI (Black, flake8)
 3. **Tests**: pytest with coverage
 4. **Status Check**: GitHub shows test results
 5. **Merge**: If all checks pass
@@ -123,7 +122,7 @@ Here is how the pieces work together:
 1.  A developer creates a pull request from a feature branch to `main`.
 2.  The `pr-test.yml` workflow is automatically triggered.
 3.  The **`test`** job runs, performing all necessary checks:
-    - Pre-commit hooks (Black, isort, flake8)
+    - Pre-commit hooks (Black, flake8)
     - Unit and integration tests
     - Code coverage reporting
 4.  GitHub sees the branch protection rule on `main` and blocks the "Merge" button, showing the pending status of the **`test`** job.
@@ -145,9 +144,6 @@ pre-commit run --all-files
 
 # Fix formatting
 black src/ tests/
-
-# Fix imports
-isort src/ tests/
 
 # Re-run hooks
 pre-commit run --all-files

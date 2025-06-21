@@ -18,7 +18,6 @@ Before code reaches CI, we use **pre-commit hooks** to ensure code quality local
 
 2. **Configuration**: The `.pre-commit-config.yaml` file defines our hooks:
    - **Black**: Code formatting
-   - **isort**: Import sorting
    - **flake8**: Linting
 
 ### Usage
@@ -64,7 +63,7 @@ GitHub Push → GitHub Actions → Cloud Build → Cloud Run
 
 **Steps**:
 1. **Setup**: Python environment, GCP authentication
-2. **Pre-commit**: Run Black, isort, and flake8 via pre-commit hooks
+2. **Pre-commit**: Run Black and flake8 via pre-commit hooks
 3. **Test**: Run pytest with coverage
 4. **Report**: Post coverage results as PR comment
 
@@ -228,7 +227,6 @@ gcloud run deploy zergling-api \
 1. **Pre-commit Failures**
    - Run `pre-commit run --all-files` to see all issues
    - Fix formatting with `black src/ tests/`
-   - Fix imports with `isort src/ tests/`
 
 2. **Build Failures**
    - Check Dockerfile syntax

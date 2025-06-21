@@ -6,7 +6,6 @@ This guide explains how to set up and use pre-commit hooks for the Zergling Fast
 
 Pre-commit hooks are automated scripts that run before every Git commit. They help ensure code quality by:
 - **Formatting code** consistently (Black)
-- **Sorting imports** properly (isort)
 - **Catching linting errors** early (flake8)
 - **Preventing bad commits** from entering the repository
 
@@ -37,14 +36,6 @@ repos:
         language_version: python3
         args: [src/, tests/]
   
-  - repo: https://github.com/pycqa/isort
-    rev: 5.13.2
-    hooks:
-      - id: isort
-        name: isort (python)
-        language_version: python3
-        args: [src/, tests/]
-  
   - repo: https://github.com/pycqa/flake8
     rev: 7.0.0
     hooks:
@@ -58,7 +49,6 @@ repos:
 | Hook | Purpose | Version |
 |------|---------|---------|
 | **Black** | Code formatting | 24.10.0 |
-| **isort** | Import sorting | 5.13.2 |
 | **flake8** | Linting | 7.0.0 |
 
 ## Usage
@@ -85,7 +75,6 @@ Run a specific hook:
 
 ```bash
 pre-commit run black
-pre-commit run isort
 pre-commit run flake8
 ```
 
@@ -104,7 +93,6 @@ git commit --no-verify -m "emergency fix"
 ```bash
 $ git commit -m "feat: add new feature"
 black....................................................................Passed
-isort (python)...........................................................Passed
 flake8...................................................................Passed
 [feature/new-feature abc1234] feat: add new feature
 ```
@@ -112,7 +100,7 @@ flake8...................................................................Passed
 ### Failure Case
 
 If hooks find issues, they will:
-1. **Fix what they can** (Black, isort)
+1. **Fix what they can** (Black)
 2. **Report what they can't fix** (flake8)
 3. **Stop the commit**
 
@@ -124,13 +112,6 @@ black....................................................................Failed
 
 reformatted src/api.py
 reformatted tests/test_api.py
-
-isort (python)...........................................................Failed
-- hook id: isort
-- files were modified by this hook
-
-Fixing src/api.py
-Fixing tests/test_api.py
 
 flake8...................................................................Passed
 ```
@@ -162,7 +143,6 @@ pre-commit autoupdate
 
 # Or manually fix formatting
 black src/ tests/
-isort src/ tests/
 git add .
 git commit -m "fix: apply formatting"
 ```
@@ -243,5 +223,4 @@ This ensures consistency between local development and CI.
 
 - **Pre-commit docs**: https://pre-commit.com/
 - **Black docs**: https://black.readthedocs.io/
-- **isort docs**: https://pycqa.github.io/isort/
 - **Flake8 docs**: https://flake8.pycqa.org/ 
