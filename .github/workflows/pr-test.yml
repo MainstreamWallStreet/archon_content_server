@@ -33,6 +33,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           
+      - name: Auto-format imports with isort
+        run: |
+          pip install isort
+          isort src/ tests/
+
       - name: Run linting
         run: |
           pip install flake8 black isort
