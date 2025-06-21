@@ -26,6 +26,7 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.CLOUD_RUN_SERVICE_ACCOUNT }}
+          create_credentials_file: true
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -119,4 +120,4 @@ jobs:
           echo "1. Check the GitHub Actions logs for detailed error information"
           echo "2. Verify GCP service account permissions"
           echo "3. Check Cloud Build and Cloud Run logs in GCP Console"
-          echo "4. Test deployment manually using \`./scripts/test_deployment.sh\` 
+          echo "4. Test deployment manually using \`./scripts/test_deployment.sh\`" 
