@@ -14,17 +14,9 @@ from fastapi.security import APIKeyHeader
 from src.config import get_setting
 from src.database import DataStore
 from src.gcs_store import GcsStore
-from src.models import (
-    HealthResponse,
-    Item,
-    ItemCreate,
-    ItemsResponse,
-    ItemUpdate,
-    ObjectDownloadResponse,
-    ObjectListResponse,
-    ObjectUploadRequest,
-    SchedulerResponse,
-)
+from src.models import (HealthResponse, Item, ItemCreate, ItemsResponse,
+                        ItemUpdate, ObjectDownloadResponse, ObjectListResponse,
+                        ObjectUploadRequest, SchedulerResponse)
 from src.scheduler import BackgroundScheduler, get_scheduler
 
 # Configure logging
