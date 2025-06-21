@@ -492,5 +492,6 @@ For issues with this template:
 
 ## License
 
-This template is provided as-is for educational and development purposes. # Test deployment Sat Jun 21 12:20:30 PDT 2025
-# CD pipeline test Sat Jun 21 12:22:48 PDT 2025
+This template is provided as-is for educational and development purposes.
+
+<!-- Trigger CD pipeline test: $(date) -->
