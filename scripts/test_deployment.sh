@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Testing Zergling Direct Cloud Run Deployment..."
+echo "🚀 Testing Archon Content Direct Cloud Run Deployment..."
 
 # Set variables
 PROJECT_ID="mainstreamwallstreet"
 REGION="us-central1"
-SERVICE_NAME="zergling-api"
+SERVICE_NAME="archon-content-api"
 
 # Get the current commit SHA
 COMMIT_SHA=$(git rev-parse --short HEAD)

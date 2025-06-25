@@ -147,4 +147,17 @@ resource "google_secret_manager_secret" "perplexity_api_key" {
 resource "google_secret_manager_secret_version" "perplexity_api_key" {
   secret      = google_secret_manager_secret.perplexity_api_key.id
   secret_data = var.perplexity_api_key
+}
+
+# Secret Manager - OpenAI API Key
+resource "google_secret_manager_secret" "openai_api_key" {
+  secret_id = "openai-api-key"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "openai_api_key" {
+  secret      = google_secret_manager_secret.openai_api_key.id
+  secret_data = var.openai_api_key
 } 

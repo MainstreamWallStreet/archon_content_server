@@ -1,6 +1,6 @@
 variable "project" {}
 variable "region" { default = "us-central1" }
-variable "github_owner" { default = "griffinclark" }
+variable "github_owner" { default = "MainstreamWallStreet" }
 variable "github_repo" { default = "archon_content_server" }
 
 # Application configuration
@@ -26,6 +26,13 @@ variable "google_sa_value" {
 # Perplexity Research API Key
 variable "perplexity_api_key" {
   description = "API key used to access the private Perplexity research server"
+  type        = string
+  sensitive   = true
+}
+
+# OpenAI API Key
+variable "openai_api_key" {
+  description = "OpenAI API key for calls made by the application"
   type        = string
   sensitive   = true
 }

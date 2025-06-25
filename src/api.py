@@ -22,6 +22,7 @@ from src.models import (
     SchedulerResponse,
 )
 from src.scheduler import BackgroundScheduler, get_scheduler
+from src.routers.generate import router as generate_router
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -220,3 +221,11 @@ async def validation_error_handler(request, exc):
     return JSONResponse(
         status_code=422, content={"detail": "Validation error", "errors": exc.errors()}
     )
+
+
+# ---- LangFlow integration (optional) ---------------------------------------
+from src.langflow_mount import attach_langflow
+
+attach_langflow(app)
+
+app.include_router(generate_router)
