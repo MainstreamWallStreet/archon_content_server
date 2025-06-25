@@ -50,13 +50,3 @@ class DataStore(ABC):
 
     def delete_object(self, object_name: str) -> None:
         raise NotImplementedError
-
-
-class GcsStore(DataStore):
-    """
-    Google Cloud Storage implementation for example_bucket.
-    """
-
-    def __init__(self, bucket_name: str):
-        self.bucket_name = bucket_name
-        # ... existing code ...

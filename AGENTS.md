@@ -1,6 +1,6 @@
 # Project Agents.md Guide for AI Agents
 
-This Agents.md file provides comprehensive guidance for AI agents working with the Zergling FastAPI server template codebase.
+This Agents.md file provides comprehensive guidance for AI agents working with the Archon Content Server codebase.
 
 ## Request Management Workflow
 
@@ -105,14 +105,13 @@ AI agents must ensure:
 - `/src`: Source code that AI agents should analyze and modify
   - `/api.py`: Main FastAPI application with route handlers
   - `/config.py`: Configuration management and environment variables
-  - `/database.py`: Database connection and session management
-  - `/gcs_store.py`: Google Cloud Storage data store implementation
+  - `/database.py`: Data store interface definitions
+  - `/in_memory_store.py`: In-memory store implementation used by default
   - `/models.py`: Pydantic models for data validation
   - `/scheduler.py`: Background task scheduler
 - `/tests`: Test files that AI agents should maintain and extend
   - `/test_api.py`: API endpoint tests
   - `/test_config.py`: Configuration tests
-  - `/test_database.py`: Database tests
   - `/test_models.py`: Model validation tests
 - `/infra`: Terraform infrastructure as code
   - `/main.tf`: Main infrastructure configuration
@@ -122,7 +121,7 @@ AI agents must ensure:
 - `/scripts`: Utility scripts for deployment and testing
   - `/test_deployment.sh`: Manual deployment testing
   - `/test_api.sh`: API testing script
-  - `/setup_zergling.sh`: Initial setup script
+  - `/setup_local_dev.sh`: Initial setup script
 - `/docs`: Documentation files (organized by category)
   - `/README.md`: Documentation index and navigation guide
   - `/deployment/`: Deployment-related documentation
@@ -253,7 +252,7 @@ black --check src/
 pytest
 
 # Build Docker image locally
-docker build -t zergling-test .
+docker build -t archon-test .
 ```
 
 All checks must pass before AI agent generated code can be merged. Agents.md helps ensure AI agents follow these requirements.
@@ -271,10 +270,14 @@ All checks must pass before AI agent generated code can be merged. Agents.md hel
 
 ### Data Storage Guidelines
 
-- AI agents should use the existing GCS store interface in `src/gcs_store.py`
-- AI agents should implement proper error handling for storage operations
-- AI agents should use JSON serialization for data persistence
-- AI agents should follow the existing data structure patterns
+Archon Content Server uses a simple in-memory store (`src/in_memory_store.py`).  There is **no external cloud storage** by default.  If persistent storage is required in the future, add a new `DataStore` implementation and corresponding tests.
+
+Guidelines:
+
+1. Re-use the `DataStore` interface in `src/database.py` for any new back-end.
+2. Always write unit tests for the new store before implementation (TDD).
+3. Use clear error handling (`ValueError`, `FileNotFoundError`, etc.) and propagate exceptions via the API layer.
+4. Keep the in-memory store as the default fallback for local development and CI.
 
 ### Background Tasks
 

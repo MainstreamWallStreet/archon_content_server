@@ -1,3 +1,3 @@
 """
-Zergling - FastAPI Server Template
+Archon Content Server – FastAPI Application
 """

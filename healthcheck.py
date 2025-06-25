@@ -1,6 +1,6 @@
 import requests
 
-URL = "https://zergling-455624753981.us-central1.run.app/health"
+URL = "https://archon-content-api.example.com/health"
 
 
 def test_health() -> bool:
@@ -18,6 +18,6 @@ def test_health() -> bool:
 
 
 if __name__ == "__main__":
-    print("Testing Zergling API health endpoint...")
+    print("Testing Archon Content API health endpoint...")
     success = test_health()
     print(f"\nTest {'passed' if success else 'failed'}")

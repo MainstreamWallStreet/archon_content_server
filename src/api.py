@@ -2,27 +2,23 @@
 Main FastAPI application for the template.
 """
 
-import base64
 import logging
 import secrets
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Security
-from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
+from fastapi.responses import JSONResponse
 
 from src.config import get_setting
 from src.database import DataStore
-from src.gcs_store import GcsStore
+from src.in_memory_store import InMemoryStore
 from src.models import (
     HealthResponse,
     Item,
     ItemCreate,
     ItemsResponse,
     ItemUpdate,
-    ObjectDownloadResponse,
-    ObjectListResponse,
-    ObjectUploadRequest,
     SchedulerResponse,
 )
 from src.scheduler import BackgroundScheduler, get_scheduler
@@ -48,8 +44,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Zergling FastAPI Server",
-    description="A production-ready FastAPI server template with GCP integration",
+    title="Archon Content Server",
+    description="Archon Content Server – lightweight FastAPI application",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -62,11 +58,10 @@ scheduler: BackgroundScheduler = None
 
 
 def get_data_store() -> DataStore:
-    """Get the data store instance."""
+    """Get the data store instance (singleton)."""
     global data_store
     if data_store is None:
-        bucket_name = get_setting("EXAMPLE_BUCKET")
-        data_store = GcsStore(bucket_name)
+        data_store = InMemoryStore()
     return data_store
 
 
@@ -80,7 +75,7 @@ def get_scheduler_instance() -> BackgroundScheduler:
 
 def validate_api_key(api_key: str = Security(API_KEY_HEADER)) -> str:
     """Validate the API key."""
-    expected_key = get_setting("ZERGLING_API_KEY")
+    expected_key = get_setting("ARCHON_API_KEY")
     if not secrets.compare_digest(api_key, expected_key):
         raise HTTPException(
             status_code=401,
@@ -203,103 +198,6 @@ async def run_scheduler(_: str = Depends(validate_api_key)):
     except Exception as e:
         logger.error(f"Error running scheduler: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get(
-    "/objects",
-    response_model=ObjectListResponse,
-    tags=["Objects"],
-    summary="List all objects in the example_bucket",
-    description="Returns a list of all object names stored in the example_bucket.",
-)
-async def list_objects(_: str = Depends(validate_api_key)):
-    """
-    List all objects in the example_bucket.
-    """
-    store = get_data_store()
-    objects = store.list_objects()
-    return ObjectListResponse(objects=objects)
-
-
-@app.get(
-    "/objects/{object_name}",
-    response_model=ObjectDownloadResponse,
-    tags=["Objects"],
-    summary="Download an object from the example_bucket",
-    description="Download the specified object as base64-encoded data.",
-)
-async def download_object(object_name: str, _: str = Depends(validate_api_key)):
-    """
-    Download an object from the example_bucket.
-    """
-    store = get_data_store()
-    try:
-        data = store.get_object(object_name)
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    encoded = base64.b64encode(data).decode()
-    return ObjectDownloadResponse(object_name=object_name, data=encoded)
-
-
-@app.post(
-    "/objects",
-    status_code=201,
-    tags=["Objects"],
-    summary="Upload a new object to the example_bucket",
-    description="Upload a new object with the given name and base64-encoded data. Fails if the object already exists.",
-)
-async def upload_object(
-    request: ObjectUploadRequest, _: str = Depends(validate_api_key)
-):
-    """
-    Upload a new object to the example_bucket.
-    """
-    store = get_data_store()
-    data = base64.b64decode(request.data)
-    try:
-        store.put_object(request.object_name, data)
-    except FileExistsError as e:
-        raise HTTPException(status_code=409, detail=str(e))
-    return {"message": f"Object {request.object_name} uploaded successfully."}
-
-
-@app.put(
-    "/objects/{object_name}",
-    tags=["Objects"],
-    summary="Update an existing object in the example_bucket",
-    description="Update (overwrite) the specified object with new base64-encoded data. Fails if the object does not exist.",
-)
-async def update_object(
-    object_name: str, request: ObjectUploadRequest, _: str = Depends(validate_api_key)
-):
-    """
-    Update (overwrite) an existing object in the example_bucket.
-    """
-    store = get_data_store()
-    data = base64.b64decode(request.data)
-    try:
-        store.update_object(object_name, data)
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    return {"message": f"Object {object_name} updated successfully."}
-
-
-@app.delete(
-    "/objects/{object_name}",
-    tags=["Objects"],
-    summary="Delete an object from the example_bucket",
-    description="Delete the specified object from the example_bucket.",
-)
-async def delete_object(object_name: str, _: str = Depends(validate_api_key)):
-    """
-    Delete an object from the example_bucket.
-    """
-    store = get_data_store()
-    try:
-        store.delete_object(object_name)
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    return {"message": f"Object {object_name} deleted successfully."}
 
 
 # Error handlers

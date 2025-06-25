@@ -16,13 +16,13 @@ data "google_project" "current" {}
 
 # Existing service accounts (pre-created outside Terraform)
 data "google_service_account" "cloud_run_sa" {
-  account_id = "cloud-run-zergling-sa"
+  account_id = "cloud-run-archon-content-sa"
 }
 
 # Artifact Registry
 resource "google_artifact_registry_repository" "docker_repo" {
   location      = var.region
-  repository_id = "zergling"
+  repository_id = "archon-content"
   format        = "DOCKER"
 }
 
@@ -35,14 +35,14 @@ resource "google_artifact_registry_repository_iam_member" "cloudbuild_writer" {
 
 # Workload Identity Pool and provider
 resource "google_iam_workload_identity_pool" "github_pool" {
-  workload_identity_pool_id = "zergling-github-pool-v3"
-  display_name              = "Zergling GitHub Actions Pool"
+  workload_identity_pool_id = "archon-github-pool"
+  display_name              = "Archon GitHub Actions Pool"
 }
 
 resource "google_iam_workload_identity_pool_provider" "github_provider_v3" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.github_pool.workload_identity_pool_id
-  workload_identity_pool_provider_id = "zergling-github-provider"
-  display_name                       = "Zergling GitHub Actions Provider"
+  workload_identity_pool_provider_id = "archon-github-provider"
+  display_name                       = "Archon GitHub Actions Provider"
 
   attribute_mapping = {
     "google.subject"       = "assertion.sub"
@@ -105,27 +105,27 @@ resource "google_project_iam_member" "cloud_run_secret_accessor" {
 resource "google_cloud_run_service_iam_member" "public_access" {
   location = var.region
   project  = var.project
-  service  = "zergling-api"
+  service  = "archon-content-api"
   role     = "roles/run.invoker"
   member   = "allUsers"
 }
 
-# Secret Manager - Zergling API Key
-resource "google_secret_manager_secret" "zergling_api_key" {
-  secret_id = "zergling-api-key"
+# Secret Manager - Archon API Key
+resource "google_secret_manager_secret" "archon_api_key" {
+  secret_id = "archon-api-key"
   replication {
     auto {}
   }
 }
 
-resource "google_secret_manager_secret_version" "zergling_api_key" {
-  secret      = google_secret_manager_secret.zergling_api_key.id
-  secret_data = var.zergling_api_key
+resource "google_secret_manager_secret_version" "archon_api_key" {
+  secret      = google_secret_manager_secret.archon_api_key.id
+  secret_data = var.archon_api_key
 }
 
 # Secret Manager - Google Service Account
 resource "google_secret_manager_secret" "google_sa" {
-  secret_id = "zergling-google-sa-value"
+  secret_id = "archon-google-sa-value"
   replication {
     auto {}
   }
@@ -134,17 +134,4 @@ resource "google_secret_manager_secret" "google_sa" {
 resource "google_secret_manager_secret_version" "google_sa" {
   secret      = google_secret_manager_secret.google_sa.id
   secret_data = var.google_sa_value
-}
-
-# GCS bucket for application data
-resource "google_storage_bucket" "zergling_data" {
-  name          = var.example_bucket
-  location      = var.region
-  force_destroy = true
-}
-
-resource "google_storage_bucket_iam_member" "zergling_data_writer" {
-  bucket = google_storage_bucket.zergling_data.name
-  role   = "roles/storage.objectViewer"
-  member = "serviceAccount:${data.google_service_account.cloud_run_sa.email}"
 } 

@@ -71,29 +71,3 @@ class ErrorResponse(BaseModel):
     """Response model for errors."""
 
     detail: str = Field(..., description="Error details")
-
-
-class ObjectListResponse(BaseModel):
-    """
-    Response model for listing objects in the example_bucket.
-    """
-
-    objects: List[str] = Field(..., description="List of object names in the bucket.")
-
-
-class ObjectUploadRequest(BaseModel):
-    """
-    Request model for uploading or updating an object.
-    """
-
-    object_name: str = Field(..., description="Name of the object to upload or update.")
-    data: str = Field(..., description="Base64-encoded data to store in the object.")
-
-
-class ObjectDownloadResponse(BaseModel):
-    """
-    Response model for downloading an object.
-    """
-
-    object_name: str = Field(..., description="Name of the object.")
-    data: str = Field(..., description="Base64-encoded data of the object.")

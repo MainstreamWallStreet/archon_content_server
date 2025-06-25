@@ -1,36 +1,34 @@
-# Zergling FastAPI Server Template
+# Archon Content Server
 
-A production-ready FastAPI server template with GCP integration, API key auth, GCS-based storage, background scheduler, and CI/CD. All legacy and business-specific code has been removed.
+Archon Content Server is a lightweight FastAPI application with API-key authentication, background task scheduler, full test-suite, and optional Cloud Run deployment.  It ships with an in-memory store by default so it can run anywhere without external dependencies.
 
 ## Features
 
-- **FastAPI Framework**: Modern, fast web framework with automatic API documentation
-- **Google Cloud Integration**: GCS for storage, Secret Manager for secrets, Cloud Run for deployment
-- **Authentication**: API key-based authentication with configurable security
-- **Data Storage**: Generic GCS-based data store with JSON persistence
-- **Background Tasks**: Built-in scheduler for periodic operations
-- **Comprehensive Testing**: Full test suite with async support and mocking
-- **CI/CD Pipeline**: Automated build and deployment with Cloud Build and direct Cloud Run deployment
-- **Infrastructure as Code**: Terraform configuration for all GCP resources
-- **Development Environment**: Hot reload, Docker support, and development tools
-- **Production Ready**: Logging, error handling, health checks, and monitoring
+- **FastAPI Framework** – Modern web framework with automatic OpenAPI docs
+- **Authentication** – Simple header-based API-key auth (`ARCHON_API_KEY`)
+- **Data Store** – In-memory `DataStore` (easy to swap for a DB later)
+- **Background Tasks** – Built-in scheduler for periodic or manual tasks
+- **Comprehensive Testing** – 100 % passing test-suite covering core logic
+- **CI/CD** – GitHub Actions + Terraform for optional Cloud Run deployment
+- **Infrastructure as Code** – Terraform templates for GCP (no GCS bucket required)
+- **Developer Experience** – Hot reload, Docker support, linting, typing
+- **Production Ready** – Structured logging, error handling, health checks
 
 ## Project Structure
 
 ```
-fastapi_server_template/
+archon_content_server/
 ├── src/                    # Application source code
 │   ├── api.py             # FastAPI application and routes
 │   ├── config.py          # Configuration management
-│   ├── database.py        # GCS-based data store
-│   ├── gcs_store.py       # Google Cloud Storage utilities
+│   ├── database.py        # Data store interface
+│   ├── in_memory_store.py # Default in-memory store implementation
 │   ├── models.py          # Pydantic data models
 │   └── scheduler.py       # Background task scheduler
 ├── tests/                 # Test suite
 │   ├── conftest.py        # Pytest configuration and fixtures
 │   ├── test_api.py        # API endpoint tests
 │   ├── test_config.py     # Configuration tests
-│   ├── test_database.py   # Database tests
 │   └── test_models.py     # Model tests
 ├── infra/                 # Infrastructure as Code
 │   ├── main.tf           # Main Terraform configuration
@@ -244,7 +242,6 @@ Before running the application locally, you need to set up GCP authentication:
    # Edit .env and update these values:
    # - GOOGLE_CLOUD_PROJECT=your-actual-project-id
    # - GOOGLE_APPLICATION_CREDENTIALS=/Users/yourusername/.config/gcp/zergling-sa.json
-   # - EXAMPLE_BUCKET=your-actual-bucket-name (from terraform output)
    # - ZERGLING_API_KEY=your-secret-api-key
    ```
 
@@ -440,14 +437,14 @@ The application uses the following environment variables. For local development,
 
 | Variable | Description | Default / Example | Used In | Required For |
 |:---|:---|:---|:---|:---|
-| `APP_NAME` | The name of the application. | `zergling` | App | Both |
+| `APP_NAME` | The name of the application. | `archon-content` | App | Both |
 | `LOG_LEVEL` | The logging level for the application. | `INFO` | App | Both |
 | `DEBUG` | Enables or disables debug mode. | `false` | App, Cloud Build | Both |
 | `ENV` | The deployment environment. | `dev` | App | Both |
-| `ZERGLING_API_KEY` | The secret API key for authentication. | `your-secret-api-key` | App (via Secret Manager) | Both |
-| `GOOGLE_CLOUD_PROJECT`| Your Google Cloud Project ID. | `your-gcp-project-id` | App, Terraform | Both |
-| `EXAMPLE_BUCKET` | The GCS bucket for data storage. | `your-gcs-bucket-name`| App, Cloud Build | Both |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to the GCP service account JSON file. | `/path/to/creds.json`| Local Dev Only | Local Dev Only |
+| `ARCHON_API_KEY` | The secret API key for authentication. | `your-secret-api-key` | App (via Secret Manager) | Both |
+| `GOOGLE_CLOUD_PROJECT`| Your Google Cloud Project ID (optional if not deploying to GCP). | `your-gcp-project-id` | Infra | Cloud Deploy |
+| `EXAMPLE_BUCKET` | GCS bucket name | Get from `terraform output` after running `terraform apply` | Both |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to the GCP service account JSON file (only for Cloud Run deploys). | `/path/to/creds.json`| Local Dev Only | Cloud Deploy |
 
 ### GCP Setup
 
@@ -544,8 +541,8 @@ The template includes:
 ./scripts/test_deployment.sh
 
 # Direct Cloud Run deployment
-gcloud run deploy zergling-api \
-  --image=us-central1-docker.pkg.dev/mainstreamwallstreet/zergling/zergling:latest \
+gcloud run deploy archon-content-api \
+  --image=us-central1-docker.pkg.dev/mainstreamwallstreet/archon-content/archon-content:latest \
   --region=us-central1 \
   --platform=managed
 ```
@@ -555,7 +552,7 @@ gcloud run deploy zergling-api \
 ### Core Components
 
 - **API Layer**: FastAPI application with route handlers
-- **Data Layer**: GCS-based JSON storage with generic interface
+- **Data Layer**: In-memory store implementing the `DataStore` interface
 - **Scheduler**: Background task management
 - **Configuration**: Environment and secret management
 
@@ -563,7 +560,7 @@ gcloud run deploy zergling-api \
 
 1. **Request** → API endpoint with authentication
 2. **Validation** → Pydantic models and business logic
-3. **Storage** → GCS bucket operations
+3. **Storage** → In-memory dictionary (or your custom store)
 4. **Response** → JSON response with proper status codes
 
 ### Background Tasks

@@ -10,12 +10,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from google.cloud import storage
 
 from src.api import app
 from src.config import get_setting
 from src.database import DataStore
-from src.gcs_store import GcsStore
 from src.models import Item, ItemCreate, ItemUpdate
 
 
@@ -31,24 +29,6 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
 def test_client() -> TestClient:
     """Create a test client for the FastAPI application."""
     return TestClient(app)
-
-
-@pytest.fixture
-def mock_gcs_client() -> MagicMock:
-    """Mock Google Cloud Storage client."""
-    with patch("src.gcs_store.storage.Client") as mock_client:
-        # Mock bucket
-        mock_bucket = MagicMock()
-        mock_bucket.exists.return_value = True
-        mock_client.return_value.bucket.return_value = mock_bucket
-
-        yield mock_client
-
-
-@pytest.fixture
-def mock_data_store(mock_gcs_client: MagicMock) -> GcsStore:
-    """Create a mock data store for testing."""
-    return GcsStore("test-bucket")
 
 
 @pytest.fixture
@@ -113,57 +93,7 @@ def test_env():
     with patch.dict(
         os.environ,
         {
-            "ZERGLING_API_KEY": "test-api-key",
-            "EXAMPLE_BUCKET": "test-bucket",
+            "ARCHON_API_KEY": "test-api-key",
         },
     ):
         yield
-
-
-@pytest.fixture
-def mock_gcs_bucket_data() -> dict:
-    """Mock GCS bucket data for testing."""
-    return {
-        "items": [
-            {
-                "id": "item-1",
-                "name": "Test Item 1",
-                "description": "First test item",
-                "created_at": "2024-01-01T00:00:00Z",
-                "updated_at": "2024-01-01T00:00:00Z",
-            },
-            {
-                "id": "item-2",
-                "name": "Test Item 2",
-                "description": "Second test item",
-                "created_at": "2024-01-02T00:00:00Z",
-                "updated_at": "2024-01-02T00:00:00Z",
-            },
-        ]
-    }
-
-
-@pytest.fixture
-def mock_gcs_blob() -> MagicMock:
-    """Mock GCS blob for testing."""
-    mock_blob = MagicMock()
-    mock_blob.exists.return_value = True
-    mock_blob.download_as_text.return_value = json.dumps({"test": "data"})
-    return mock_blob
-
-
-@pytest.fixture
-def mock_gcs_bucket(mock_gcs_blob: MagicMock) -> MagicMock:
-    """Mock GCS bucket for testing."""
-    mock_bucket = MagicMock()
-    mock_bucket.blob.return_value = mock_gcs_blob
-    mock_bucket.exists.return_value = True
-    return mock_bucket
-
-
-@pytest.fixture
-def mock_storage_client(mock_gcs_bucket: MagicMock) -> MagicMock:
-    """Mock storage client for testing."""
-    mock_client = MagicMock()
-    mock_client.bucket.return_value = mock_gcs_bucket
-    return mock_client

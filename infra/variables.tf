@@ -1,7 +1,7 @@
 variable "project" {}
 variable "region" { default = "us-central1" }
 variable "github_owner" { default = "griffinclark" }
-variable "github_repo" { default = "zergling_fastapi_server_template" }
+variable "github_repo" { default = "archon_content_server" }
 
 # Application configuration
 variable "image" {
@@ -9,9 +9,9 @@ variable "image" {
   type        = string
 }
 
-# Zergling API Key
-variable "zergling_api_key" {
-  description = "API key required to access Zergling server endpoints"
+# Archon API Key
+variable "archon_api_key" {
+  description = "API key required to access Archon Content Server endpoints"
   type        = string
   sensitive   = true
 }
@@ -21,10 +21,4 @@ variable "google_sa_value" {
   description = "Google Service Account JSON value"
   type        = string
   sensitive   = true
-}
-
-# Example bucket
-variable "example_bucket" {
-  description = "GCS bucket for storing and retrieving objects"
-  type        = string
 }

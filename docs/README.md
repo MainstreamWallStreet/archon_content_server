@@ -1,10 +1,10 @@
 # Documentation
 
-Comprehensive documentation for the Zergling FastAPI Server Template, organized by category for easy navigation.
+Comprehensive documentation for the Archon Content Server, organized by category for easy navigation.
 
 ## Overview
 
-This documentation provides complete guidance for setting up, developing, deploying, and maintaining the Zergling FastAPI Server Template. Whether you're a new developer getting started, an experienced engineer deploying to production, or an AI agent working with the codebase, you'll find the information you need organized by topic and complexity level.
+This documentation provides complete guidance for setting up, developing, deploying, and maintaining the Archon Content Server. Whether you're a new developer getting started, an experienced engineer deploying to production, or an AI agent working with the codebase, you'll find the information you need organized by topic and complexity level.
 
 ## Prerequisites
 

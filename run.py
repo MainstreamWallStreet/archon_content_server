@@ -15,7 +15,7 @@ def main():
     load_dotenv()
 
     # Verify required environment variables
-    required_vars = ["ZERGLING_API_KEY", "EXAMPLE_BUCKET"]
+    required_vars = ["ARCHON_API_KEY"]
 
     missing_vars = [var for var in required_vars if not os.getenv(var)]
 
@@ -30,7 +30,7 @@ def main():
     os.makedirs("logs", exist_ok=True)
 
     # Get configuration
-    app_name = "Zergling FastAPI Server"
+    app_name = "Archon Content Server"
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8080"))
     reload = os.getenv("ENV", "dev") == "dev"
