@@ -253,6 +253,7 @@ Before running the application locally, you need to set up GCP authentication:
 | `GOOGLE_CLOUD_PROJECT` | Your GCP project ID | Use your actual project ID | Both |
 | `EXAMPLE_BUCKET` | GCS bucket name | Get from `terraform output` after running `terraform apply` | Both |
 | `ZERGLING_API_KEY` | API key for authentication | Create a secure random string | Both |
+| `PERPLEXITY_RESEARCH_SERVER_API_KEY` | API key for private Perplexity research server | *(secret)* | App | Optional |
 
 ### Testing Local Setup
 
@@ -445,6 +446,7 @@ The application uses the following environment variables. For local development,
 | `GOOGLE_CLOUD_PROJECT`| Your Google Cloud Project ID (optional if not deploying to GCP). | `your-gcp-project-id` | Infra | Cloud Deploy |
 | `EXAMPLE_BUCKET` | GCS bucket name | Get from `terraform output` after running `terraform apply` | Both |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to the GCP service account JSON file (only for Cloud Run deploys). | `/path/to/creds.json`| Local Dev Only | Cloud Deploy |
+| `PERPLEXITY_RESEARCH_SERVER_API_KEY` | API key for private Perplexity research server | *(secret)* | App | Optional |
 
 ### GCP Setup
 

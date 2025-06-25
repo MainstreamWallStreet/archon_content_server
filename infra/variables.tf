@@ -22,3 +22,10 @@ variable "google_sa_value" {
   type        = string
   sensitive   = true
 }
+
+# Perplexity Research API Key
+variable "perplexity_api_key" {
+  description = "API key used to access the private Perplexity research server"
+  type        = string
+  sensitive   = true
+}

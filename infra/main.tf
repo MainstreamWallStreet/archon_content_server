@@ -134,4 +134,17 @@ resource "google_secret_manager_secret" "google_sa" {
 resource "google_secret_manager_secret_version" "google_sa" {
   secret      = google_secret_manager_secret.google_sa.id
   secret_data = var.google_sa_value
+}
+
+# Secret Manager - Perplexity Research API Key
+resource "google_secret_manager_secret" "perplexity_api_key" {
+  secret_id = "perplexity-research-api-key"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "perplexity_api_key" {
+  secret      = google_secret_manager_secret.perplexity_api_key.id
+  secret_data = var.perplexity_api_key
 } 
