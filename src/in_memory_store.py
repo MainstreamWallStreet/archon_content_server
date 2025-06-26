@@ -58,4 +58,4 @@ class InMemoryStore(DataStore):
     def delete_item(self, item_id: str) -> None:
         if item_id not in self._items:
             raise ValueError(f"Item with id {item_id} not found")
-        del self._items[item_id] 
+        del self._items[item_id]

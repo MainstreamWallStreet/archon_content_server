@@ -7,7 +7,7 @@ on:
 env:
   PROJECT_ID: mainstreamwallstreet
   REGION: us-central1
-  SERVICE_NAME: zergling-api
+  SERVICE_NAME: archon-content-api
 
 jobs:
   deploy:

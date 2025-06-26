@@ -1,6 +1,6 @@
 substitutions:
   _REGION: us-central1
-  _SERVICE: zergling-api
+  _SERVICE: archon-content-api
 
 steps:
   # 1. Build image
@@ -12,9 +12,9 @@ steps:
       - '-f'
       - Dockerfile
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/archon-content/archon-content:$BUILD_ID'
       - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:latest'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/archon-content/archon-content:latest'
       - '.'
 
   # 2. Push image
@@ -22,7 +22,7 @@ steps:
     name: gcr.io/cloud-builders/docker
     args:
       - push
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/archon-content/archon-content:$BUILD_ID'
     waitFor: ['Build']
 
   # 3. Deploy to Cloud Run
@@ -33,7 +33,7 @@ steps:
       - run
       - deploy
       - ${_SERVICE}
-      - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
+      - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/archon-content/archon-content:$BUILD_ID'
       - '--region=${_REGION}'
       - '--platform=managed'
       - '--allow-unauthenticated'
@@ -41,10 +41,10 @@ steps:
       - '--cpu=2'
       - '--concurrency=2'
       - '--timeout=300'
-      - '--service-account=cloud-run-zergling-sa@$PROJECT_ID.iam.gserviceaccount.com'
+      - '--service-account=cloud-run-archon-content-sa@$PROJECT_ID.iam.gserviceaccount.com'
       - '--set-env-vars=EXAMPLE_BUCKET=zergling-data,DEBUG=false,LOG_LEVEL=INFO'
-      - '--set-secrets=ZERGLING_API_KEY=zergling-api-key:latest'
-      - '--set-secrets=GOOGLE_APPLICATION_CREDENTIALS_JSON=zergling-google-sa-value:latest'
+      - '--set-secrets=ARCHON_API_KEY=archon-api-key:latest'
+      - '--set-secrets=GOOGLE_APPLICATION_CREDENTIALS_JSON=archon-google-sa-value:latest'
     waitFor: ['Push']
 
   # 4. Verify deployment
@@ -76,8 +76,8 @@ steps:
     waitFor: ['Deploy']
 
 images:
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:$BUILD_ID'
-  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/zergling/zergling:latest'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/archon-content/archon-content:$BUILD_ID'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/archon-content/archon-content:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY
