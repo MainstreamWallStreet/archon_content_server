@@ -46,9 +46,15 @@ else:
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Generate spreadsheet from free-form prompt.")
-    p.add_argument("--objective", "-p", required=True, help="High-level modelling objective.")
-    p.add_argument("--data", "-d", required=True, help="Plaintext data (or @path to file).")
+    p = argparse.ArgumentParser(
+        description="Generate spreadsheet from free-form prompt."
+    )
+    p.add_argument(
+        "--objective", "-p", required=True, help="High-level modelling objective."
+    )
+    p.add_argument(
+        "--data", "-d", required=True, help="Plaintext data (or @path to file)."
+    )
     p.add_argument(
         "--output-dir",
         "-o",
@@ -92,4 +98,4 @@ def main(argv: list[str] | None = None) -> None:  # pragma: no cover – manual 
 
 
 if __name__ == "__main__":  # pragma: no cover
-    main() 
+    main()

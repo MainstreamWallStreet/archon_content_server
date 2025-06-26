@@ -53,7 +53,10 @@ _CELL_REF_RE = re.compile(r"\b([A-Z]+)(\d+)\b")
 # Public interface
 # ---------------------------------------------------------------------------
 
-def build_from_plan(plan: Dict[str, Any], output_dir: Path = Path(".")) -> Path:  # noqa: D401,E501
+
+def build_from_plan(
+    plan: Dict[str, Any], output_dir: Path = Path(".")
+) -> Path:  # noqa: D401,E501
     """Build an Excel workbook from a validated plan (v0.2).
 
     Parameters
@@ -117,7 +120,9 @@ def build_from_plan(plan: Dict[str, Any], output_dir: Path = Path(".")) -> Path:
 
         # Write header (Row 1)
         if ws.cell(row=1, column=col_index).value not in (None, ""):
-            raise LayoutError(f"Header cell {get_column_letter(col_index)}1 already occupied")
+            raise LayoutError(
+                f"Header cell {get_column_letter(col_index)}1 already occupied"
+            )
         ws.cell(row=1, column=col_index, value=header)
         used_headers_cols.add(col_index)
         max_data_col = max(max_data_col, col_index)
@@ -176,7 +181,9 @@ def _validate_filename(filename: str) -> None:
         raise SchemaError("Filename must not contain path separators")
 
 
-def _write_cell(ws, col_index: int, cell_obj: Dict[str, Any], used_labels_rows: set[int]):
+def _write_cell(
+    ws, col_index: int, cell_obj: Dict[str, Any], used_labels_rows: set[int]
+):
     # Basic schema validation -------------------------------------------------------
     if not isinstance(cell_obj, dict):
         raise SchemaError("Each cell specification must be a dictionary")
@@ -290,8 +297,13 @@ def _validate_formulas(ws, max_row: int, max_col: int) -> None:
                 for col_letters, row_str in _CELL_REF_RE.findall(formula):
                     col_idx = column_index_from_string(col_letters)
                     row_idx = int(row_str)
-                    if col_idx < 2 or row_idx < 2 or col_idx > max_col or row_idx > max_row:
+                    if (
+                        col_idx < 2
+                        or row_idx < 2
+                        or col_idx > max_col
+                        or row_idx > max_row
+                    ):
                         raise FormulaError(
                             f"Formula in {cell.coordinate} references out-of-bounds cell "
                             f"{col_letters}{row_str}"
-                        ) 
+                        )

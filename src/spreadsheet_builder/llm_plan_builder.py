@@ -12,7 +12,6 @@ returned so that tests do not need live network access.
 import json
 import logging
 import os
-from pathlib import Path
 from typing import Any, Dict
 
 from langchain_openai import ChatOpenAI
@@ -80,13 +79,17 @@ class PlanGenerator:
                 "• Use the OBJECTIVE section to decide labels & structure.\n"
                 "• Use the DATA section to source raw numeric values.\n"
                 "• All numeric values raw (≤2dp) with explicit unit + format token.\n\n"
-                + SCHEMA_HINT + "\nReturn ONLY JSON – no markdown fences."
+                + SCHEMA_HINT
+                + "\nReturn ONLY JSON – no markdown fences."
             )
         )
 
         user_content = (
-            "OBJECTIVE:\n" + objective.strip() + "\n\n" +
-            "DATA:\n" + (plaintext_data.strip() or "(none)")
+            "OBJECTIVE:\n"
+            + objective.strip()
+            + "\n\n"
+            + "DATA:\n"
+            + (plaintext_data.strip() or "(none)")
         )
         human = HumanMessage(content=user_content)
 
@@ -113,16 +116,20 @@ class PlanGenerator:
             # prepare feedback message and retry
             feedback = (
                 f"The previous response had an error → {last_err}.\n"
-                "Please correct it and return ONLY JSON. Remember the schema and enums: \n" + SCHEMA_HINT
+                "Please correct it and return ONLY JSON. Remember the schema and enums: \n"
+                + SCHEMA_HINT
             )
             base_msgs.append(HumanMessage(content=feedback))
 
-        raise ValueError(f"Unable to obtain valid plan after {max_tries} attempts. Last error: {last_err}")
+        raise ValueError(
+            f"Unable to obtain valid plan after {max_tries} attempts. Last error: {last_err}"
+        )
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _sample_plan() -> Dict[str, Any]:
     """Return deterministic plan identical to tests' fixture."""
@@ -183,4 +190,4 @@ def _basic_validate(plan: Dict[str, Any]) -> None:  # pragma: no cover – light
                 if fmt := cell.get("format"):
                     FormatToken(fmt)
     except Exception as exc:
-        raise ValueError("Invalid LLM plan structure") from exc 
+        raise ValueError("Invalid LLM plan structure") from exc

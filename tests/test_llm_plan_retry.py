@@ -19,6 +19,7 @@ class DummyLLM:
             return SimpleNamespace(content="{ not valid json")
         # second call returns valid sample
         import json
+
         return SimpleNamespace(content=json.dumps(_sample_plan()))
 
 
@@ -27,4 +28,4 @@ def test_generate_with_retry(monkeypatch):
     monkeypatch.setattr(pg, "llm", DummyLLM())
 
     plan = pg.generate("Objective", "some data")
-    assert plan["worksheet"]["name"] == "Model" 
+    assert plan["worksheet"]["name"] == "Model"

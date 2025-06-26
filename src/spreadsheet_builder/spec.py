@@ -3,7 +3,6 @@ from __future__ import annotations
 """Shared specification enums for Spreadsheet Builder plans."""
 
 import enum
-from typing import Any
 
 __all__ = [
     "CellType",
@@ -54,6 +53,7 @@ class FormatToken(str, enum.Enum):
 # Helper validation functions (LLM & runtime reuse)
 # ---------------------------------------------------------------------------
 
+
 def _ensure_enum(value: str, enum_cls: type[enum.Enum], field: str) -> enum.Enum:
     try:
         return enum_cls(value)  # type: ignore[arg-type]
@@ -72,4 +72,4 @@ def validate_unit(value: str) -> Unit:
 
 
 def validate_format(value: str) -> FormatToken:
-    return _ensure_enum(value, FormatToken, "format token")  # type: ignore[return-value] 
+    return _ensure_enum(value, FormatToken, "format token")  # type: ignore[return-value]

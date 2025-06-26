@@ -12,7 +12,9 @@ returns immediately, so importing it never breaks local development.
 from fastapi import FastAPI
 
 
-def attach_langflow(parent: FastAPI, prefix: str = "/langflow") -> None:  # pragma: no cover
+def attach_langflow(
+    parent: FastAPI, prefix: str = "/langflow"
+) -> None:  # pragma: no cover
     """Mount the LangFlow application on *parent* under *prefix*.
 
     Parameters
@@ -52,7 +54,11 @@ def attach_langflow(parent: FastAPI, prefix: str = "/langflow") -> None:  # prag
 
     # Mount BEFORE the backend so that asset requests are served directly and
     # are not caught by the backend application.
-    parent.mount(f"{prefix}/assets", StaticFiles(directory=static_dir / "assets"), name="langflow-assets")
+    parent.mount(
+        f"{prefix}/assets",
+        StaticFiles(directory=static_dir / "assets"),
+        name="langflow-assets",
+    )
 
     # -------------------------------------------------------------------
     # Index file ---------------------------------------------------------
@@ -60,7 +66,9 @@ def attach_langflow(parent: FastAPI, prefix: str = "/langflow") -> None:  # prag
     # Serve the modified index.html at <prefix>/ (with corrected <base href>)
     index_path = static_dir / "index.html"
     original_index = index_path.read_text(encoding="utf-8")
-    adjusted_index = original_index.replace('<base href="/" />', f'<base href="{prefix}/" />', 1)
+    adjusted_index = original_index.replace(
+        '<base href="/" />', f'<base href="{prefix}/" />', 1
+    )
 
     @parent.get(f"{prefix}/", include_in_schema=False)
     async def _langflow_index() -> HTMLResponse:  # type: ignore[override]
@@ -77,4 +85,4 @@ def attach_langflow(parent: FastAPI, prefix: str = "/langflow") -> None:  # prag
     except TypeError:
         backend_app = _create_langflow_app()  # type: ignore[assignment]
 
-    parent.mount(f"{prefix}", backend_app, name="langflow-backend") 
+    parent.mount(f"{prefix}", backend_app, name="langflow-backend")
