@@ -26,6 +26,17 @@ def main():
         print("\nPlease set these variables in your .env file")
         return
 
+    # Check for research flow dependencies (optional but recommended)
+    research_vars = ["OPENAI_API_KEY", "PINECONE_API_KEY"]
+    missing_research_vars = [var for var in research_vars if not os.getenv(var)]
+    
+    if missing_research_vars:
+        print("⚠️  Missing research flow environment variables:")
+        for var in missing_research_vars:
+            print(f"  - {var}")
+        print("\nThese are required for the research flow to work properly.")
+        print("You can still run the server, but research functionality may not work.")
+
     # Create necessary directories
     os.makedirs("logs", exist_ok=True)
 
@@ -39,6 +50,7 @@ def main():
     print(f"🚀 Starting {app_name}...")
     print(f"📝 API documentation available at http://localhost:{port}/docs")
     print(f"🔍 Health check available at http://localhost:{port}/health")
+    print(f"🔬 Research endpoint available at http://localhost:{port}/execute-research")
 
     if reload:
         print("🔄 Hot reload enabled for development")

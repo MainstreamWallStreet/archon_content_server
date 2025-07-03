@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from src.auth import APIKeyAuth
 from src.spreadsheet_builder import PlanGenerator, build_from_plan
 
 router = APIRouter(tags=["generation"])
@@ -37,7 +38,7 @@ class SpreadsheetRequest(BaseModel):
     response_description="The generated .xlsx file is returned as a download.",
     response_class=FileResponse,
 )
-async def generate_spreadsheet(body: SpreadsheetRequest):
+async def generate_spreadsheet(body: SpreadsheetRequest, api_key: APIKeyAuth):
     """LLM → build-plan → workbook → download pipeline."""
 
     # 1️⃣ Obtain plan from LLM
