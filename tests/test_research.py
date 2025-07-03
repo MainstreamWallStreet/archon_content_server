@@ -15,7 +15,7 @@ class TestResearchEndpoint:
 
     def test_research_endpoint_missing_env_vars(self):
         """Test that the endpoint returns 503 when environment variables are missing."""
-        with patch("src.routers.research.get_setting", side_effect=RuntimeError("Missing config")):
+        with patch("src.api.get_setting", side_effect=RuntimeError("Missing config")):
             response = client.post(
                 "/research",
                 json={
@@ -53,7 +53,7 @@ class TestResearchEndpoint:
         }
         mock_client.post.return_value = mock_response
 
-        with patch("src.routers.research.get_setting") as mock_get_setting:
+        with patch("src.api.get_setting") as mock_get_setting:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
                 "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/"
@@ -88,7 +88,7 @@ class TestResearchEndpoint:
         mock_response.text = "Internal Server Error"
         mock_client.post.return_value = mock_response
 
-        with patch("src.routers.research.get_setting") as mock_get_setting:
+        with patch("src.api.get_setting") as mock_get_setting:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
                 "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/"
@@ -130,7 +130,7 @@ class TestResearchEndpoint:
         mock_response.text = "Plain text response"
         mock_client.post.return_value = mock_response
 
-        with patch("src.routers.research.get_setting") as mock_get_setting:
+        with patch("src.api.get_setting") as mock_get_setting:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
                 "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/"
@@ -179,7 +179,7 @@ class TestResearchEndpoint:
         }
         mock_client.post.return_value = mock_response
 
-        with patch("src.routers.research.get_setting") as mock_get_setting:
+        with patch("src.api.get_setting") as mock_get_setting:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
                 "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/"
