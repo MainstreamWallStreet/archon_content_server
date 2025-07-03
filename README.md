@@ -27,7 +27,8 @@ archon_content_server/
 │   ├── models.py          # Pydantic data models
 │   ├── routers/           # API route modules
 │   │   ├── __init__.py    # Router package init
-│   │   └── spreadsheet.py # Spreadsheet builder endpoints
+│   │   ├── spreadsheet.py # Spreadsheet builder endpoints
+│   │   └── research.py    # Research endpoints
 │   ├── spreadsheet_builder/ # Spreadsheet generation module
 │   │   ├── __init__.py    # Package init
 │   │   ├── builder.py     # Excel workbook builder
@@ -41,6 +42,7 @@ archon_content_server/
 │   ├── test_api.py        # API endpoint tests
 │   ├── test_config.py     # Configuration tests
 │   ├── test_models.py     # Model tests
+│   ├── test_research.py   # Research endpoint tests
 │   └── test_spreadsheet_builder.py # Spreadsheet builder tests
 ├── infra/                 # Infrastructure as Code
 │   ├── main.tf           # Main Terraform configuration
@@ -266,6 +268,8 @@ Before running the application locally, you need to set up GCP authentication:
 | `EXAMPLE_BUCKET` | GCS bucket name | Get from `terraform output` after running `terraform apply` | Both |
 | `ZERGLING_API_KEY` | API key for authentication | Create a secure random string | Both |
 | `OPENAI_API_KEY` | OpenAI API key for LLM plan generation | *(secret)* | App | Optional |
+| `LANGFLOW_SERVER_URL` | Base URL for LangFlow server | `http://0.0.0.0:7860/api/v1/run/` | App | Optional |
+| `LANGFLOW_API_KEY` | API key for LangFlow server authentication | *(secret)* | App | Optional |
 
 ### Testing Local Setup
 
@@ -459,6 +463,8 @@ The application uses the following environment variables. For local development,
 | `EXAMPLE_BUCKET` | GCS bucket name | Get from `terraform output` after running `terraform apply` | Both |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to the GCP service account JSON file (only for Cloud Run deploys). | `/path/to/creds.json`| Local Dev Only | Cloud Deploy |
 | `OPENAI_API_KEY` | OpenAI API key for LLM plan generation | *(secret)* | App | Optional |
+| `LANGFLOW_SERVER_URL` | Base URL for LangFlow server | `http://0.0.0.0:7860/api/v1/run/` | App | Optional |
+| `LANGFLOW_API_KEY` | API key for LangFlow server authentication | *(secret)* | App | Optional |
 
 ### GCP Setup
 
@@ -491,6 +497,10 @@ All endpoints require an `X-API-Key` header with your configured API key.
 
 - `POST /spreadsheet/build` - Generate Excel workbook from JSON build plan
 - `POST /spreadsheet/plan` - Generate build plan from natural language description
+
+### Research Endpoints
+
+- `POST /research` - Execute a LangFlow research flow with custom query and flow ID
 
 ### Admin Endpoints
 
