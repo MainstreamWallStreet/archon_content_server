@@ -13,6 +13,7 @@ Archon Content Server is a lightweight FastAPI application with API-key authenti
 - **Infrastructure as Code** – Terraform templates for GCP (no GCS bucket required)
 - **Developer Experience** – Hot reload, Docker support, linting, typing
 - **Production Ready** – Structured logging, error handling, health checks
+- **Spreadsheet Builder** – Excel workbook generation from JSON build plans
 
 ## Project Structure
 
@@ -24,12 +25,23 @@ archon_content_server/
 │   ├── database.py        # Data store interface
 │   ├── in_memory_store.py # Default in-memory store implementation
 │   ├── models.py          # Pydantic data models
+│   ├── routers/           # API route modules
+│   │   ├── __init__.py    # Router package init
+│   │   └── spreadsheet.py # Spreadsheet builder endpoints
+│   ├── spreadsheet_builder/ # Spreadsheet generation module
+│   │   ├── __init__.py    # Package init
+│   │   ├── builder.py     # Excel workbook builder
+│   │   ├── cli.py         # Command-line interface
+│   │   ├── llm_plan_builder.py # LLM plan generation
+│   │   ├── spec.py        # Data specifications
+│   │   └── README.md      # Module documentation
 │   └── scheduler.py       # Background task scheduler
 ├── tests/                 # Test suite
 │   ├── conftest.py        # Pytest configuration and fixtures
 │   ├── test_api.py        # API endpoint tests
 │   ├── test_config.py     # Configuration tests
-│   └── test_models.py     # Model tests
+│   ├── test_models.py     # Model tests
+│   └── test_spreadsheet_builder.py # Spreadsheet builder tests
 ├── infra/                 # Infrastructure as Code
 │   ├── main.tf           # Main Terraform configuration
 │   ├── variables.tf      # Terraform variables
@@ -253,7 +265,7 @@ Before running the application locally, you need to set up GCP authentication:
 | `GOOGLE_CLOUD_PROJECT` | Your GCP project ID | Use your actual project ID | Both |
 | `EXAMPLE_BUCKET` | GCS bucket name | Get from `terraform output` after running `terraform apply` | Both |
 | `ZERGLING_API_KEY` | API key for authentication | Create a secure random string | Both |
-| `PERPLEXITY_RESEARCH_SERVER_API_KEY` | API key for private Perplexity research server | *(secret)* | App | Optional |
+| `OPENAI_API_KEY` | OpenAI API key for LLM plan generation | *(secret)* | App | Optional |
 
 ### Testing Local Setup
 
@@ -446,7 +458,7 @@ The application uses the following environment variables. For local development,
 | `GOOGLE_CLOUD_PROJECT`| Your Google Cloud Project ID (optional if not deploying to GCP). | `your-gcp-project-id` | Infra | Cloud Deploy |
 | `EXAMPLE_BUCKET` | GCS bucket name | Get from `terraform output` after running `terraform apply` | Both |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Path to the GCP service account JSON file (only for Cloud Run deploys). | `/path/to/creds.json`| Local Dev Only | Cloud Deploy |
-| `PERPLEXITY_RESEARCH_SERVER_API_KEY` | API key for private Perplexity research server | *(secret)* | App | Optional |
+| `OPENAI_API_KEY` | OpenAI API key for LLM plan generation | *(secret)* | App | Optional |
 
 ### GCP Setup
 
@@ -474,11 +486,11 @@ All endpoints require an `X-API-Key` header with your configured API key.
 - `GET /` - Health check
 - `GET /health` - Detailed health status
 - `GET /docs` - Interactive API documentation
-- `GET /items` - List all items
-- `POST /items` - Create new item
-- `GET /items/{item_id}` - Get specific item
-- `PUT /items/{item_id}` - Update item
-- `DELETE /items/{item_id}` - Delete item
+
+### Spreadsheet Builder Endpoints
+
+- `POST /spreadsheet/build` - Generate Excel workbook from JSON build plan
+- `POST /spreadsheet/plan` - Generate build plan from natural language description
 
 ### Admin Endpoints
 
