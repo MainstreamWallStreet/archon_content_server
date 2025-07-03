@@ -3,10 +3,9 @@ from pydantic import BaseModel, Field
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import asyncio
-import os
 
 from src.auth import APIKeyAuth
-from src.routers.research import execute_flow_sync
+from src.langflow_runner import run_langflow_json
 
 
 router = APIRouter(tags=["generic-vid"])
@@ -56,7 +55,7 @@ async def execute_generic_vid(
         loop = asyncio.get_event_loop()
         with ThreadPoolExecutor() as executor:
             result, debug_info, _ = await loop.run_in_executor(
-                executor, execute_flow_sync, str(flow_path), body.query
+                executor, run_langflow_json, str(flow_path), body.query
             )
     except Exception as exc:  # pragma: no cover – surfaced via HTTPException
         raise HTTPException(
@@ -65,4 +64,4 @@ async def execute_generic_vid(
 
     return GenericVIDResponse(
         result=result, metadata={"flow": "generic_vid_response", "debug": debug_info}
-    ) 
+    )

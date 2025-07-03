@@ -626,3 +626,66 @@ For issues with this template:
 This template is provided as-is for educational and development purposes.
 
 <!-- Trigger CD pipeline test: $(date) -->
+
+## Deployment on Kubernetes
+
+This repository now ships two containerised services that work together:
+
+| Service            | Purpose | Exposed | Image |
+|--------------------|---------|---------|-------|
+| **Archon Content Server** | Public-facing FastAPI gateway – authentication, rate-limit, high-level endpoints. | Ingress / LoadBalancer on port **8080** | `archon-content-server` (built from repo Dockerfile) |
+| **Langflow Runtime** | Headless Langflow server that executes one or more JSON flows. No UI. | *cluster-internal* ClusterIP on port **7868** | `langflow-runtime` |
+
+The two pods run in the same namespace. `archon` calls `langflow` via the internal service url `http://langflow:7868`.
+
+### Directory structure
+
+```
+├── docker/
+│   ├── Dockerfile.api         # builds archon server image
+│   └── Dockerfile.langflow    # builds headless langflow image
+└── k8s/
+    ├── archon-deployment.yaml
+    ├── archon-service.yaml
+    ├── langflow-deployment.yaml
+    └── langflow-service.yaml
+```
+
+### Build & push images
+
+```bash
+# Archon
+docker build -f docker/Dockerfile.api -t ghcr.io/<org>/archon:latest .
+
+# Langflow – bundle flows inside
+docker build -f docker/Dockerfile.langflow -t ghcr.io/<org>/langflow-runtime:latest .
+```
+
+Push the images to the registry your cluster can reach.
+
+### Deploy
+
+```bash
+kubectl apply -f k8s/langflow-service.yaml
+kubectl apply -f k8s/langflow-deployment.yaml
+
+kubectl apply -f k8s/archon-service.yaml
+kubectl apply -f k8s/archon-deployment.yaml
+```
+
+`archon-service` is declared as `LoadBalancer`; once the cloud provider allocates an external IP you can hit:
+
+```
+https://<EXTERNAL_IP>/execute-generic-vid
+```
+
+### Environment variables
+
+Both deployments expect at minimum:
+
+* `OPENAI_API_KEY` – injected from a Kubernetes Secret.
+* `LANGFLOW_URL`  – preset in `archon-deployment.yaml` as `http://langflow:7868`.
+
+### Local smoke-test (Docker Compose)
+
+For developers without a cluster, `docker-compose` mirrors the same layout (`docker/docker-compose.yml`). Run `docker compose up --build` then curl `localhost:8080`.

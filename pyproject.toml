@@ -1,5 +1,6 @@
 [project]
-version = "1.0.0"
+name = "archon_content_server"
+version = "1.0.1"
 
 [tool.pytest.ini_options]
 # Pytest arguments kept minimal for compatibility

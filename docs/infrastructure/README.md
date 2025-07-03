@@ -1,4 +1,4 @@
-# Infrastructure Documentation
+ # Infrastructure Documentation
 
 This document describes the Terraform infrastructure for the Zergling FastAPI server template and what needs to be customized for your specific use case.
 

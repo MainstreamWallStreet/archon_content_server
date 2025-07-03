@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  langflow:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.langflow
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    expose:
+      - "7868"
+
+  archon:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    ports:
+      - "8080:8080"
+    depends_on:
+      - langflow
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LANGFLOW_URL=http://langflow:7868 

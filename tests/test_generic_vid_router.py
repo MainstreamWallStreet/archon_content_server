@@ -57,4 +57,4 @@ def test_generic_vid_endpoint_returns_result(test_client: TestClient):
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert data["result"].strip() != "" 
+    assert data["result"].strip() != ""

@@ -29,16 +29,16 @@ def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
 def mock_app() -> FastAPI:
     """Create a mock FastAPI application for testing."""
     app = FastAPI(title="Test API", version="1.0.0")
-    
+
     # Add basic test endpoints if needed
     @app.get("/health")
     async def health_check():
         return {"status": "healthy"}
-    
+
     @app.get("/test")
     async def test_endpoint():
         return {"message": "test"}
-    
+
     # Add mock endpoints that tests expect with proper authentication and validation
     @app.post("/execute-research")
     async def execute_research_mock(request: Request):
@@ -46,31 +46,31 @@ def mock_app() -> FastAPI:
         api_key = request.headers.get("X-API-Key")
         if not api_key or api_key != "test-api-key":
             raise HTTPException(status_code=401, detail="Unauthorized")
-        
+
         # Get request body
         body = await request.json()
         if not body or "query" not in body or not body["query"]:
             raise HTTPException(status_code=422, detail="Validation error")
-        
+
         return {"result": "Mock research result", "metadata": {"mocked": True}}
-    
+
     @app.post("/build-context")
     async def build_context_mock(request: Request):
         # Check for API key in headers
         api_key = request.headers.get("X-API-Key")
         if not api_key or api_key != "test-api-key":
             raise HTTPException(status_code=401, detail="Unauthorized")
-        
+
         # Get request body
         body = await request.json()
         if not body or "query" not in body or not body["query"]:
             raise HTTPException(status_code=422, detail="Validation error")
-        
+
         return {
             "result": "Citi's ROE is depressed by high capital requirements and low net interest margins.",
-            "metadata": {"mocked": True}
+            "metadata": {"mocked": True},
         }
-    
+
     # Stub for Generic VID Response endpoint
     @app.post("/execute-generic-vid")
     async def execute_generic_vid_mock(request: Request):
@@ -78,17 +78,14 @@ def mock_app() -> FastAPI:
         api_key = request.headers.get("X-API-Key")
         if not api_key or api_key != "test-api-key":
             raise HTTPException(status_code=401, detail="Unauthorized")
-        
+
         # Get request body
         body = await request.json()
         if not body or "query" not in body or not body["query"]:
             raise HTTPException(status_code=422, detail="Validation error")
-        
-        return {
-            "result": "Mock Generic VID result",
-            "metadata": {"mocked": True}
-        }
-    
+
+        return {"result": "Mock Generic VID result", "metadata": {"mocked": True}}
+
     return app
 
 

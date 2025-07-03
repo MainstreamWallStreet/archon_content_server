@@ -28,6 +28,8 @@ try:
 except Exception:  # pragma: no cover
     pass
 
-if DefinedNameDict is not None and not hasattr(DefinedNameDict, "__iter_objects_patched"):
+if DefinedNameDict is not None and not hasattr(
+    DefinedNameDict, "__iter_objects_patched"
+):
     DefinedNameDict.__iter__ = lambda self: iter(self.values())  # type: ignore
     DefinedNameDict.__iter_objects_patched = True  # type: ignore[attr-defined]

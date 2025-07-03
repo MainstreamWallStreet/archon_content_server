@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Refactored LangFlow execution into reusable `run_langflow_json` utility.
 - Initial FastAPI server template with GCP integration
 - API key authentication
 - GCS-based storage

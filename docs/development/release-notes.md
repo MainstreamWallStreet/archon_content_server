@@ -8,6 +8,11 @@ This file contains the official release history for the Zergling FastAPI Server 
 
 ## [Unreleased]
 
+### Added
+- Refactored LangFlow execution into reusable `run_langflow_json` utility.
+- Updated research and generic VID routers to use new runner.
+- Added unit tests for LangFlow runner.
+
 - This section will be updated automatically by agents as new changes are made.
 
 ---

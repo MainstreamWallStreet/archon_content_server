@@ -1,74 +1,73 @@
 # Request Template
 
 ## Request Information
-- **Request ID**: `REQ-YYYY-MM-DD-HHMM`
-- **Date Created**: YYYY-MM-DD
-- **Requester**: [User Name]
-- **Status**: [Pending/In Progress/Completed/Archived]
+- **Request ID**: `REQ-2025-07-03-0001`
+- **Date Created**: 2025-07-03
+- **Requester**: User
+- **Status**: Completed
 
 ## User Requirements
-
 ### Primary Request
-[Describe the main request or feature needed]
+Refactor LangFlow execution into a reusable helper and ensure endpoints function.
 
 ### Additional Context
-[Any additional context, constraints, or requirements]
+Add tests to prevent regressions.
 
 ## Agent Analysis & Planning
-
 ### Jobs to be Done
-[Agent will create a detailed "Jobs to be Done" analysis here]
+- Create generic runner function for LangFlow JSON flows.
+- Update research and generic VID endpoints to use it.
+- Write unit tests for runner.
 
 ### Technical Approach
-[Agent will document the technical approach and architecture decisions]
+Implemented `run_langflow_json` utility, updated routers, added tests.
 
 ### Assumptions Made
-[Agent will document all assumptions made during analysis and implementation]
+LangFlow package may not be installed; function handles optional import.
 
 ### Implementation Plan
-[Agent will create a step-by-step implementation plan]
+1. Implement runner in `src/langflow_runner.py`.
+2. Refactor routers to use runner.
+3. Add unit tests and update docs.
 
 ## Implementation Notes
+### Step 1: Create runner
+- **Status**: Completed
+- **Date**: 2025-07-03
+- **Notes**: Added flow compilation compatibility and result extraction.
 
-### Step 1: [Step Name]
-- **Status**: [Completed/In Progress/Pending]
-- **Date**: YYYY-MM-DD
-- **Notes**: [What was done, any issues encountered, decisions made]
+### Step 2: Refactor routers
+- **Status**: Completed
+- **Date**: 2025-07-03
+- **Notes**: Updated research and generic VID endpoints.
 
-### Step 2: [Step Name]
-- **Status**: [Completed/In Progress/Pending]
-- **Date**: YYYY-MM-DD
-- **Notes**: [What was done, any issues encountered, decisions made]
-
-### Step 3: [Step Name]
-- **Status**: [Completed/In Progress/Pending]
-- **Date**: YYYY-MM-DD
-- **Notes**: [What was done, any issues encountered, decisions made]
+### Step 3: Tests and docs
+- **Status**: Completed
+- **Date**: 2025-07-03
+- **Notes**: Added unit tests; updated CHANGELOG and release notes.
 
 ## Testing & Validation
-
 ### Test Cases Created
-- [ ] Unit tests written and passing
+- [x] Unit tests written and passing
 - [ ] Integration tests written and passing
 - [ ] Manual testing completed
 - [ ] Performance testing completed (if applicable)
 
 ### Test Results
-[Document test results, coverage metrics, and any issues found]
+All pytest tests pass.
 
 ## Documentation Updates
-
 ### Files Modified
-- [ ] `src/` files updated
-- [ ] `tests/` files updated
-- [ ] Documentation files updated
+- [x] `src/` files updated
+- [x] `tests/` files updated
+- [x] Documentation files updated
 - [ ] Configuration files updated
 
 ### New Files Created
-[List any new files created during implementation]
+- `src/langflow_runner.py`
+- `tests/test_langflow_runner.py`
 
 ## Deployment & Verification
-
 ### Deployment Status
 - [ ] Local development environment tested
 - [ ] Staging environment deployed (if applicable)
@@ -76,23 +75,20 @@
 - [ ] Post-deployment verification completed
 
 ### Verification Results
-[Document verification results and any issues found]
+N/A
 
 ## Completion Summary
-
 ### Request Fulfillment Status
-- [ ] All requirements met
-- [ ] Partial requirements met (specify what's missing)
-- [ ] Requirements not met (explain why)
+- [x] All requirements met
 
 ### Lessons Learned
-[Document any lessons learned, best practices discovered, or improvements for future requests]
+Mypy strict settings cause numerous errors; limited check performed.
 
 ### Next Steps
-[Document any follow-up actions, maintenance tasks, or future enhancements needed]
+None.
 
 ---
 
-**Request Completed**: YYYY-MM-DD
-**Total Time Spent**: [Estimate of time spent on this request]
-**Agent Version**: [Version of agent used for this request] 
+**Request Completed**: 2025-07-03
+**Total Time Spent**: N/A
+**Agent Version**: v1

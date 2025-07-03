@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: archon
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: archon
+  template:
+    metadata:
+      labels:
+        app: archon
+    spec:
+      containers:
+        - name: archon
+          image: ghcr.io/your-org/archon:latest  # update during CI
+          ports:
+            - containerPort: 8080
+          env:
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openai-secret
+                  key: OPENAI_API_KEY
+            - name: LANGFLOW_URL
+              value: "http://langflow:7868" 
