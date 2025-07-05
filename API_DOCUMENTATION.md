@@ -108,7 +108,58 @@ curl -X POST "http://localhost:8080/research" \
 
 ---
 
-### 3. Spreadsheet Build Endpoint
+### 3. Video Reasoner Endpoint
+
+**POST** `/vid-reasoner`
+
+Execute a video reasoning flow on the external LangFlow server using a specific flow ID.
+
+#### Request Body
+
+```json
+{
+  "input_value": "hello world!",
+  "output_type": "text",
+  "input_type": "text"
+}
+```
+
+| Field | Type | Required | Description |
+|:---|:---|:---|:---|
+| `input_value` | string | Yes | The input value to be processed by the video reasoning flow |
+| `output_type` | string | No | Specifies the expected output format (default: "text") |
+| `input_type` | string | No | Specifies the input format (default: "text") |
+
+#### Response
+
+```json
+{
+  "result": "Video reasoning analysis result from LangFlow"
+}
+```
+
+#### Example
+
+```bash
+curl -X POST "http://localhost:8080/vid-reasoner" \
+  -H "X-API-Key: your-secret-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input_value": "hello world!",
+    "output_type": "text",
+    "input_type": "text"
+  }'
+```
+
+#### Error Responses
+
+- **503 Service Unavailable**: Missing LangFlow configuration
+- **500 Internal Server Error**: LangFlow server error
+- **422 Validation Error**: Invalid request body
+
+---
+
+### 4. Spreadsheet Build Endpoint
 
 **POST** `/spreadsheet/build`
 
@@ -153,7 +204,7 @@ curl -X POST "http://localhost:8080/spreadsheet/build" \
 
 ---
 
-### 4. Spreadsheet Plan Endpoint
+### 5. Spreadsheet Plan Endpoint
 
 **POST** `/spreadsheet/plan`
 
@@ -253,6 +304,24 @@ curl -X POST "http://localhost:8080/research" \
   }'
 ```
 
+### Complete Video Reasoning Workflow
+
+```bash
+# 1. Check service health
+curl -X GET "http://localhost:8080/health" \
+  -H "X-API-Key: your-secret-api-key"
+
+# 2. Execute video reasoning
+curl -X POST "http://localhost:8080/vid-reasoner" \
+  -H "X-API-Key: your-secret-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input_value": "Analyze this video for key insights",
+    "output_type": "text",
+    "input_type": "text"
+  }'
+```
+
 ### Complete Spreadsheet Workflow
 
 ```bash
@@ -303,6 +372,17 @@ response = requests.post(f"{BASE_URL}/research",
                         headers=HEADERS)
 print(response.json()["result"])
 
+# Video reasoning
+vid_reasoner_data = {
+    "input_value": "hello world!",
+    "output_type": "text",
+    "input_type": "text"
+}
+response = requests.post(f"{BASE_URL}/vid-reasoner", 
+                        json=vid_reasoner_data, 
+                        headers=HEADERS)
+print(response.json()["result"])
+
 # Generate spreadsheet
 spreadsheet_data = {
     "objective": "Model quarterly revenue",
@@ -335,6 +415,16 @@ async function research(query, flowId) {
   const response = await axios.post(`${BASE_URL}/research`, {
     query,
     flow_id: flowId
+  }, { headers });
+  return response.data.result;
+}
+
+// Video reasoning
+async function videoReasoner(inputValue, outputType = 'text', inputType = 'text') {
+  const response = await axios.post(`${BASE_URL}/vid-reasoner`, {
+    input_value: inputValue,
+    output_type: outputType,
+    input_type: inputType
   }, { headers });
   return response.data.result;
 }
@@ -399,4 +489,5 @@ For issues and questions:
 
 ## Version History
 
+- **v1.1.0**: Added video reasoning endpoint (`/vid-reasoner`)
 - **v1.0.0**: Initial release with LangFlow integration and spreadsheet generation 
