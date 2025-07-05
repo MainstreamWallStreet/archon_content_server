@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive test suite
 - Docker containerization
 - Terraform infrastructure as code
+- Added detailed logging to the /vid-reasoner endpoint to debug Langflow API integration issues.
+- Fixed configuration and request handling to ensure correct API key, payload, and URL are used for Langflow.
+- Confirmed that the endpoint now returns valid JSON responses from Langflow and not HTML.
+- Removed unneeded debug logging after successful verification.
 
 ### Changed
 - Converted from legacy financial app to generic Zergling template

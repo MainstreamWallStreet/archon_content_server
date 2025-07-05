@@ -1,17 +1,16 @@
 # Archon Content Server
 
-Archon Content Server is a lightweight FastAPI application with API-key authentication, background task scheduler, full test-suite, and optional Cloud Run deployment.  It ships with an in-memory store by default so it can run anywhere without external dependencies.
+A streamlined FastAPI application focused on two core functionalities:
+1. **LangFlow Integration** - Execute research flows via external LangFlow server
+2. **Spreadsheet Building** - Generate Excel workbooks from natural language descriptions
 
 ## Features
 
+- **LangFlow Research** – Execute external LangFlow flows and extract clean text responses
+- **Spreadsheet Generation** – Create Excel workbooks from natural language using OpenAI
 - **FastAPI Framework** – Modern web framework with automatic OpenAPI docs
 - **Authentication** – Simple header-based API-key auth (`ARCHON_API_KEY`)
-- **Data Store** – In-memory `DataStore` (easy to swap for a DB later)
-- **Background Tasks** – Built-in scheduler for periodic or manual tasks
-- **Comprehensive Testing** – 100 % passing test-suite covering core logic
-- **CI/CD** – GitHub Actions + Terraform for optional Cloud Run deployment
-- **Infrastructure as Code** – Terraform templates for GCP (no GCS bucket required)
-- **Developer Experience** – Hot reload, Docker support, linting, typing
+- **Comprehensive Testing** – Full test suite covering all endpoints
 - **Production Ready** – Structured logging, error handling, health checks
 
 ## Project Structure
@@ -19,450 +18,66 @@ Archon Content Server is a lightweight FastAPI application with API-key authenti
 ```
 archon_content_server/
 ├── src/                    # Application source code
-│   ├── api.py             # FastAPI application and routes
+│   ├── api.py             # All API endpoints (consolidated)
 │   ├── config.py          # Configuration management
-│   ├── database.py        # Data store interface
-│   ├── in_memory_store.py # Default in-memory store implementation
-│   ├── models.py          # Pydantic data models
-│   └── scheduler.py       # Background task scheduler
+│   └── spreadsheet_builder/ # Spreadsheet generation module
+│       ├── __init__.py    # Package init
+│       ├── builder.py     # Excel workbook builder
+│       ├── cli.py         # Command-line interface
+│       ├── llm_plan_builder.py # LLM plan generation
+│       ├── spec.py        # Data specifications
+│       └── README.md      # Module documentation
 ├── tests/                 # Test suite
 │   ├── conftest.py        # Pytest configuration and fixtures
-│   ├── test_api.py        # API endpoint tests
 │   ├── test_config.py     # Configuration tests
-│   └── test_models.py     # Model tests
+│   ├── test_research.py   # Research endpoint tests
+│   ├── test_spreadsheet_api.py # Spreadsheet API tests
+│   └── test_spreadsheet_builder.py # Spreadsheet builder tests
 ├── infra/                 # Infrastructure as Code
-│   ├── main.tf           # Main Terraform configuration
-│   ├── variables.tf      # Terraform variables
-│   ├── outputs.tf        # Terraform outputs
-│   └── backend.tf        # Terraform backend configuration
 ├── docs/                  # Documentation
-│   ├── deployment/       # Deployment guides and troubleshooting
-│   │   ├── deploy.md     # Deployment instructions
-│   │   └── deployment_errors.md # Common deployment issues
-│   ├── development/      # Development guides
-│   │   ├── ci-cd.md      # CI/CD pipeline documentation
-│   │   ├── pipeline-setup.md # Pipeline setup guide
-│   │   ├── pre-commit-setup.md # Pre-commit hooks setup
-│   │   └── release-notes.md # Release management guide
-│   ├── infrastructure/   # Infrastructure documentation
-│   │   ├── configuration_checklist.md # Setup checklist
-│   │   ├── debug-log.md  # Infrastructure debugging
-│   │   └── README.md     # Infrastructure overview
-│   └── request-archive/  # Completed request documentation
-│       ├── README.md     # Archive overview
-│       └── request_template.md # Request template
 ├── scripts/              # Utility scripts
-│   ├── setup_local_dev.sh # Local development setup
-│   ├── setup_zergling.sh  # Zergling-specific setup
-│   ├── test_api.sh        # API testing script
-│   ├── test_deployment.sh # Deployment testing
-│   └── manage_request.sh  # Request management workflow
-├── .github/              # GitHub Actions workflows
 ├── requirements.txt      # Python dependencies
 ├── pyproject.toml        # Project configuration
 ├── Dockerfile           # Container configuration
 ├── run.py               # Application entry point
-├── init_questionnaire.md # Initial requirements questionnaire
-├── current_request.md   # Current active request (if any)
 └── README.md            # This file
 ```
 
-## Requirements
-
-- Python 3.11+
-- Google Cloud Platform account
-- Docker (for containerized deployment)
-- Terraform (for infrastructure management)
-
 ## Quick Start
 
-1. **Clone and customize:**
+1. **Clone and setup:**
    ```sh
-   git clone <template-repo>
-   cd fastapi-server-template
-   ```
-
-2. **Install dependencies:**
-   ```sh
+   git clone <repo-url>
+   cd archon_content_server
    pip install -r requirements.txt
    ```
 
-3. **Configure environment:**
+2. **Configure environment:**
    ```sh
    cp sample.env .env
    # Edit .env with your configuration
    ```
 
-4. **Run locally:**
+3. **Run locally:**
    ```sh
    python run.py
    ```
 
-5. **Access API:**
+4. **Access API:**
    - API: http://localhost:8080
    - Documentation: http://localhost:8080/docs
    - Health Check: http://localhost:8080/health
 
-## Request Management Workflow
+## Environment Variables
 
-This template includes a structured workflow for managing development requests and customizations:
-
-### Getting Started with a New Request
-
-1. **Complete the Initial Questionnaire:**
-   ```bash
-   # Fill out the questionnaire to define your requirements
-   open init_questionnaire.md
-   ```
-
-2. **Create a New Request:**
-   ```bash
-   # Use the request management script
-   ./scripts/manage_request.sh new
-   ```
-
-3. **AI Agent Processing:**
-   - The AI agent will analyze your requirements
-   - Create a detailed "Jobs to be Done" analysis
-   - Follow TDD (Test-Driven Development) approach
-   - Document all decisions and implementation steps
-   - Update `current_request.md` with progress
-
-### Request Management Commands
-
-```bash
-# Create a new request (archives current if exists)
-./scripts/manage_request.sh new
-
-# Archive current request and create new blank one
-./scripts/manage_request.sh archive
-
-# List all archived requests
-./scripts/manage_request.sh list
-
-# Show current request status
-./scripts/manage_request.sh status
-
-# Show help
-./scripts/manage_request.sh help
-```
-
-### Workflow Benefits
-
-- **Structured Approach**: Every request follows a consistent process
-- **TDD Methodology**: Tests are written first, ensuring quality
-- **Complete Documentation**: All decisions and implementations are recorded
-- **Knowledge Preservation**: Completed requests are archived for future reference
-- **Quality Assurance**: Comprehensive testing and validation at each step
-
-### Request Archive
-
-Completed requests are automatically archived in `docs/request-archive/` with:
-- Complete implementation history
-- Technical decisions and rationale
-- Test results and validation
-- Lessons learned and best practices
-- Future improvement suggestions
-
-## Documentation
-
-### 📚 [Development Guides](docs/development/)
-- [CI/CD Pipeline Setup](docs/development/ci-cd.md)
-- [Pipeline Configuration](docs/development/pipeline-setup.md)
-- [Pre-commit Hooks](docs/development/pre-commit-setup.md)
-- [Release Management](docs/development/release-notes.md)
-
-### 🚀 [Deployment Guides](docs/deployment/)
-- [Deployment Instructions](docs/deployment/deploy.md)
-- [Troubleshooting](docs/deployment/deployment_errors.md)
-
-### 🏗️ [Infrastructure Documentation](docs/infrastructure/)
-- [Configuration Checklist](docs/infrastructure/configuration_checklist.md)
-- [Debugging Guide](docs/infrastructure/debug-log.md)
-- [Infrastructure Overview](docs/infrastructure/README.md)
-
-## Local Development Setup
-
-### Quick Setup (Recommended)
-
-For the easiest setup, use our automated script:
-
-```bash
-# Make sure you're authenticated with gcloud and have infrastructure deployed
-./scripts/setup_local_dev.sh
-```
-
-This script will:
-- Check your gcloud authentication
-- Verify infrastructure is deployed
-- Download the service account key
-- Generate an API key
-- Create your `.env` file
-- Test the setup
-
-### Manual Setup
-
-If you prefer to set up manually or the automated script doesn't work for your environment:
-
-### Prerequisites for Local Development
-
-Before running the application locally, you need to set up GCP authentication:
-
-1. **Install and authenticate gcloud CLI:**
-   ```bash
-   # Install gcloud CLI (if not already installed)
-   # Follow: https://cloud.google.com/sdk/docs/install
-   
-   # Authenticate with your GCP account
-   gcloud auth login
-   gcloud config set project YOUR_PROJECT_ID
-   ```
-
-2. **Deploy infrastructure first:**
-   ```bash
-   cd infra
-   terraform init
-   terraform plan
-   terraform apply
-   ```
-
-3. **Create service account key for local development:**
-   ```bash
-   # Create a directory for your credentials
-   mkdir -p ~/.config/gcp
-   
-   # Download the service account key
-   gcloud iam service-accounts keys create ~/.config/gcp/zergling-sa.json \
-     --iam-account=cloud-run-zergling-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com
-   ```
-
-4. **Configure your .env file:**
-   ```bash
-   cp sample.env .env
-   # Edit .env and update these values:
-   # - GOOGLE_CLOUD_PROJECT=your-actual-project-id
-   # - GOOGLE_APPLICATION_CREDENTIALS=/Users/yourusername/.config/gcp/zergling-sa.json
-   # - ZERGLING_API_KEY=your-secret-api-key
-   ```
-
-### Environment Variables for Local Development
-
-| Variable | Description | How to Set | Required For |
+| Variable | Description | Required | Example |
 |:---|:---|:---|:---|
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to service account JSON file | Download from GCP Console or use gcloud command above | Local Dev Only |
-| `GOOGLE_CLOUD_PROJECT` | Your GCP project ID | Use your actual project ID | Both |
-| `EXAMPLE_BUCKET` | GCS bucket name | Get from `terraform output` after running `terraform apply` | Both |
-| `ZERGLING_API_KEY` | API key for authentication | Create a secure random string | Both |
-| `PERPLEXITY_RESEARCH_SERVER_API_KEY` | API key for private Perplexity research server | *(secret)* | App | Optional |
+| `ARCHON_API_KEY` | Authentication key for the API | Yes | `your-secret-api-key` |
+| `LANGFLOW_SERVER_URL` | Base URL for LangFlow server | Yes* | `http://0.0.0.0:7860/api/v1/run/` |
+| `LANGFLOW_API_KEY` | API key for LangFlow server | Yes* | `your-langflow-key` |
+| `OPENAI_API_KEY` | OpenAI API key for LLM plan generation | Yes* | `sk-...` |
 
-### Testing Local Setup
-
-```bash
-# Test that your credentials work
-python -c "from google.cloud import storage; client = storage.Client(); print('✅ GCP authentication working')"
-
-# Test the application
-python run.py
-
-# In another terminal, test the API
-curl http://localhost:8080/health
-```
-
-## Setup Checklist
-
-### Prerequisites
-- [ ] Google Cloud Platform account with billing enabled
-- [ ] GitHub repository for your project
-- [ ] Local development environment with Python 3.11+
-- [ ] Docker installed locally
-- [ ] Terraform installed locally
-- [ ] Google Cloud CLI installed and authenticated
-
-### GCP Project Setup
-- [ ] Create a new GCP project or select existing project
-- [ ] Enable required APIs:
-  - [ ] Cloud Run API
-  - [ ] Cloud Build API
-  - [ ] Secret Manager API
-  - [ ] Storage API
-  - [ ] Artifact Registry API
-  - [ ] IAM API
-- [ ] Create service accounts:
-  - [ ] Cloud Run service account (`cloud-run-zergling-sa`)
-  - [ ] Deployment service account (`deploy-zergling-sa`)
-
-### Infrastructure Deployment
-- [ ] Customize `infra/terraform.tfvars` with your project details
-- [ ] Run Terraform to create infrastructure:
-  ```sh
-  cd infra
-  terraform init
-  terraform plan
-  terraform apply
-  ```
-- [ ] Update Secret Manager values with your actual data
-- [ ] Verify infrastructure is working with manual deployment test
-
-### GitHub Actions Setup
-- [ ] Fork or create your own repository from this template
-- [ ] Configure GitHub repository secrets (see GitHub Actions Configuration below)
-- [ ] Test the CI/CD pipeline with a push to main branch
-- [ ] Verify automated deployment works correctly
-
-### Local Development Setup
-- [ ] Configure local environment variables in `.env`
-- [ ] Test local development server
-- [ ] Run test suite to ensure everything works
-- [ ] Test Docker build locally
-
-## GitHub Actions Configuration
-
-### Required Repository Secrets
-
-You must configure these secrets in your GitHub repository settings (`Settings` → `Secrets and variables` → `Actions`):
-
-#### 1. `WORKLOAD_IDENTITY_PROVIDER`
-**Description**: The Workload Identity provider for GitHub Actions to authenticate with GCP
-**Value**: Full provider path from Terraform output
-**How to get it**:
-```bash
-cd infra
-terraform output workload_identity_provider
-```
-
-#### 2. `CLOUD_RUN_SERVICE_ACCOUNT`
-**Description**: The service account email that GitHub Actions will impersonate
-**Value**: Service account email from Terraform output
-**How to get it**:
-```bash
-cd infra
-terraform output cloud_run_service_account
-```
-**Example**: `cloud-run-zergling-sa@your-project-id.iam.gserviceaccount.com`
-
-### Optional Repository Secrets
-
-#### 3. `GCP_PROJECT_ID`
-**Description**: Your Google Cloud project ID (if different from default)
-**Value**: Your GCP project ID
-**Example**: `my-awesome-project-123`
-
-#### 4. `GCP_REGION`
-**Description**: Your preferred GCP region (if different from default)
-**Value**: GCP region name
-**Example**: `us-central1`
-
-### Setting Up Repository Secrets
-
-1. **Navigate to your repository settings**:
-   - Go to your GitHub repository
-   - Click `Settings` tab
-   - Click `Secrets and variables` → `Actions`
-
-2. **Add each secret**:
-   - Click `New repository secret`
-   - Enter the secret name (e.g., `WORKLOAD_IDENTITY_PROVIDER`)
-   - Enter the secret value
-   - Click `Add secret`
-
-3. **Verify secrets are set**:
-   - You should see all required secrets listed
-   - Secret values are masked for security
-
-### Testing GitHub Actions
-
-1. **Push to main branch** to trigger deployment:
-   ```bash
-   git add .
-   git commit -m "test: Trigger deployment"
-   git push origin main
-   ```
-
-2. **Monitor the deployment**:
-   - Go to `Actions` tab in your repository
-   - Click on the running workflow
-   - Check each step for success/failure
-
-3. **Verify deployment**:
-   - Check that the service URL is accessible
-   - Test the health endpoint
-   - Verify logs show successful deployment
-
-### Troubleshooting GitHub Actions
-
-#### Common Issues
-
-1. **Authentication Failures**
-   - Verify `WORKLOAD_IDENTITY_PROVIDER` is correct
-   - Check that `CLOUD_RUN_SERVICE_ACCOUNT` exists and has proper permissions
-   - Ensure Workload Identity is properly configured in GCP
-
-2. **Build Failures**
-   - Check Dockerfile syntax
-   - Verify all dependencies are in `requirements.txt`
-   - Review Cloud Build logs for specific errors
-
-3. **Deployment Failures**
-   - Verify service account has Cloud Run admin permissions
-   - Check that secrets exist in Secret Manager
-   - Review Cloud Run logs for application startup issues
-
-4. **Health Check Failures**
-   - Verify application starts correctly
-   - Check environment variables and secrets are properly configured
-   - Review application logs for startup errors
-
-#### Debug Commands
-
-```bash
-# Check Workload Identity configuration
-gcloud iam workload-identity-pools providers describe zergling-github-provider \
-  --workload-identity-pool=zergling-github-pool-v3 \
-  --location=global
-
-# Verify service account permissions
-gcloud projects get-iam-policy YOUR_PROJECT_ID \
-  --flatten="bindings[].members" \
-  --format="table(bindings.role)" \
-  --filter="bindings.members:cloud-run-zergling-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com"
-
-# Test manual deployment
-./scripts/test_deployment.sh
-```
-
-## Configuration
-
-### Environment Variables
-
-The application uses the following environment variables. For local development, you can set them in a `.env` file. In production on Cloud Run, these are set via a combination of Secret Manager and the service's configuration.
-
-| Variable | Description | Default / Example | Used In | Required For |
-|:---|:---|:---|:---|:---|
-| `APP_NAME` | The name of the application. | `archon-content` | App | Both |
-| `LOG_LEVEL` | The logging level for the application. | `INFO` | App | Both |
-| `DEBUG` | Enables or disables debug mode. | `false` | App, Cloud Build | Both |
-| `ENV` | The deployment environment. | `dev` | App | Both |
-| `ARCHON_API_KEY` | The secret API key for authentication. | `your-secret-api-key` | App (via Secret Manager) | Both |
-| `GOOGLE_CLOUD_PROJECT`| Your Google Cloud Project ID (optional if not deploying to GCP). | `your-gcp-project-id` | Infra | Cloud Deploy |
-| `EXAMPLE_BUCKET` | GCS bucket name | Get from `terraform output` after running `terraform apply` | Both |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to the GCP service account JSON file (only for Cloud Run deploys). | `/path/to/creds.json`| Local Dev Only | Cloud Deploy |
-| `PERPLEXITY_RESEARCH_SERVER_API_KEY` | API key for private Perplexity research server | *(secret)* | App | Optional |
-
-### GCP Setup
-
-1. **Create a GCP project**
-2. **Enable required APIs:**
-   - Cloud Run API
-   - Cloud Build API
-   - Secret Manager API
-   - Storage API
-   - Artifact Registry API
-
-3. **Create service accounts:**
-   - Cloud Run service account
-   - Deployment service account
-
-4. **Set up Workload Identity** (for GitHub Actions)
+*Required only for the respective functionality (research or spreadsheet generation)
 
 ## API Endpoints
 
@@ -471,18 +86,35 @@ All endpoints require an `X-API-Key` header with your configured API key.
 
 ### Core Endpoints
 
-- `GET /` - Health check
-- `GET /health` - Detailed health status
-- `GET /docs` - Interactive API documentation
-- `GET /items` - List all items
-- `POST /items` - Create new item
-- `GET /items/{item_id}` - Get specific item
-- `PUT /items/{item_id}` - Update item
-- `DELETE /items/{item_id}` - Delete item
+- `GET /health` - Health check with service status and timestamp
 
-### Admin Endpoints
+### Research Endpoints
 
-- `POST /admin/tasks/run-scheduler` - Trigger background tasks
+- `POST /research` - Execute a LangFlow research flow
+  ```json
+  {
+    "query": "How should we think about risk?",
+    "flow_id": "af41bf0f-6ffb-4591-a276-8ae5f296da51"
+  }
+  ```
+
+### Spreadsheet Endpoints
+
+- `POST /spreadsheet/build` - Generate Excel workbook from natural language
+  ```json
+  {
+    "objective": "Model FY-2024 revenue break-even analysis",
+    "data": "Revenue: 763.9M, Fixed Costs: 45M, Variable Cost %: 12%"
+  }
+  ```
+
+- `POST /spreadsheet/plan` - Generate build plan JSON only (preview)
+  ```json
+  {
+    "objective": "Model FY-2024 revenue break-even analysis",
+    "data": "Revenue: 763.9M, Fixed Costs: 45M, Variable Cost %: 12%"
+  }
+  ```
 
 ## Development
 
@@ -495,7 +127,7 @@ pytest
 pytest --cov=src
 
 # Run specific test file
-pytest tests/test_api.py
+pytest tests/test_research.py
 ```
 
 ### Code Quality
@@ -511,13 +143,13 @@ black src/
 ```
 
 ### Local Development
-  ```sh
+```sh
 # Start with hot reload
 python run.py
 
 # Start with Docker
-docker build -t fastapi-template .
-docker run -p 8080:8080 fastapi-template
+docker build -t archon-content-server .
+docker run -p 8080:8080 archon-content-server
 ```
 
 ## Deployment
@@ -531,11 +163,10 @@ terraform apply
 ```
 
 ### CI/CD Pipeline
-The template includes:
+The application includes:
 - **GitHub Actions**: Automated testing and deployment
 - **Cloud Build**: Automated Docker image building
 - **Cloud Run**: Direct deployment with health verification
-- **Artifact Registry**: Container image storage
 
 ### Manual Deployment
 ```sh
@@ -544,7 +175,7 @@ The template includes:
 
 # Direct Cloud Run deployment
 gcloud run deploy archon-content-api \
-  --image=us-central1-docker.pkg.dev/mainstreamwallstreet/archon-content/archon-content:latest \
+  --image=us-central1-docker.pkg.dev/your-project/archon-content/archon-content:latest \
   --region=us-central1 \
   --platform=managed
 ```
@@ -553,64 +184,30 @@ gcloud run deploy archon-content-api \
 
 ### Core Components
 
-- **API Layer**: FastAPI application with route handlers
-- **Data Layer**: In-memory store implementing the `DataStore` interface
-- **Scheduler**: Background task management
+- **API Layer**: FastAPI application with consolidated endpoints
 - **Configuration**: Environment and secret management
+- **Spreadsheet Builder**: Excel workbook generation from LLM plans
 
 ### Data Flow
 
-1. **Request** → API endpoint with authentication
-2. **Validation** → Pydantic models and business logic
-3. **Storage** → In-memory dictionary (or your custom store)
-4. **Response** → JSON response with proper status codes
-
-### Background Tasks
-
-- **Scheduler**: Runs periodic operations
-- **Job Queue**: Manages async task processing
-
-## Customization
-
-### Adding New Endpoints
-
-1. Define Pydantic models in `src/models.py`
-2. Add route handlers in `src/api.py`
-3. Write tests in `tests/test_api.py`
-4. Update API documentation
-
-### Adding New Data Types
-
-1. Extend the base data store interface
-2. Implement storage methods
-3. Add validation models
-4. Write comprehensive tests
-
-### Infrastructure Customization
-
-1. Modify `infra/terraform.tfvars`
-2. Update resource names and configurations
-3. Add new GCP services as needed
-4. Test infrastructure changes
+1. **Research Flow**: Query → LangFlow Server → Extract Answer → Return Text
+2. **Spreadsheet Flow**: Objective → OpenAI → Build Plan → Excel File → Download
 
 ## Documentation
 
-- **[AGENTS.md](AGENTS.md)**: Guide for AI agents working with this codebase
-- **[docs/ci-cd.md](docs/ci-cd.md)**: CI/CD pipeline documentation
-- **[docs/pipeline-setup.md](docs/pipeline-setup.md)**: A step-by-step guide for configuring the CI/CD pipeline
-- **[docs/infra/README.md](docs/infra/README.md)**: Infrastructure documentation
-- **[docs/infra/quick-reference.md](docs/infra/quick-reference.md)**: Quick reference guide
-- **[docs/release-notes.md](docs/release-notes.md)**: Release notes
+- **[docs/README.md](docs/README.md)**: Detailed documentation
+- **[docs/deployment/](docs/deployment/)**: Deployment guides
+- **[docs/development/](docs/development/)**: Development guides
+- **[docs/infrastructure/](docs/infrastructure/)**: Infrastructure documentation
 
 ## Support
 
-For issues with this template:
+For issues:
 
 1. Check the [FastAPI documentation](https://fastapi.tiangolo.com/)
-2. Review [Google Cloud documentation](https://cloud.google.com/docs)
-3. Check the application logs for specific error messages
-4. Verify all customizations have been applied correctly
-5. Review the troubleshooting sections in the documentation
+2. Review application logs for specific error messages
+3. Verify environment variables are correctly configured
+4. Check the troubleshooting sections in the documentation
 
 ## Contributing
 
@@ -623,6 +220,6 @@ For issues with this template:
 
 ## License
 
-This template is provided as-is for educational and development purposes.
+This project is provided as-is for educational and development purposes.
 
 <!-- Trigger CD pipeline test: $(date) -->
