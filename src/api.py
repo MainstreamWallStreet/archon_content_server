@@ -284,14 +284,10 @@ async def vid_reasoner(body: VidReasonerRequest, api_key: str = Depends(verify_a
     Raises:
         HTTPException: 503 if configuration is missing, 500 for server errors
     """
-    logger.info(f"🎥 Vid-reasoner endpoint called with input_value: '{body.input_value}'")
-    
     # 1️⃣ Resolve configuration
     try:
         langflow_api_key = get_setting("LANGFLOW_API_KEY")
         base_url = get_setting("LANGFLOW_SERVER_URL")
-        logger.info(f"✅ Configuration loaded - Base URL: {base_url}")
-        logger.info(f"🔑 LangFlow API Key: {langflow_api_key[:10]}..." if langflow_api_key else "❌ No LangFlow API key found")
     except RuntimeError as exc:
         logger.error(f"❌ Configuration error: {exc}")
         raise HTTPException(status_code=503, detail=str(exc))
@@ -299,8 +295,6 @@ async def vid_reasoner(body: VidReasonerRequest, api_key: str = Depends(verify_a
     # Use the specific flow ID for video reasoning
     flow_id = "59ef78ef-195b-4534-9b38-21527c2c90d4"
     flow_url = f"{base_url.rstrip('/')}/{flow_id}"
-    logger.info(f"🎯 Flow ID: {flow_id}")
-    logger.info(f"🌐 Full URL: {flow_url}")
 
     payload = {
         "input_value": body.input_value,
@@ -311,21 +305,12 @@ async def vid_reasoner(body: VidReasonerRequest, api_key: str = Depends(verify_a
         "x-api-key": langflow_api_key,
         "Content-Type": "application/json",
     }
-    
-    logger.info(f"📦 Payload: {payload}")
-    logger.info(f"📋 Headers: {dict(headers)}")
 
     # 2️⃣ Perform the request
-    logger.info(f"🚀 Making request to LangFlow...")
+    logger.info("🚀 Making request to LangFlow...")
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            logger.info(f"📡 Sending POST to: {flow_url}")
             resp = await client.post(flow_url, json=payload, headers=headers)
-            logger.info(f"📊 Response status: {resp.status_code}")
-            logger.info(f"📋 Response headers: {dict(resp.headers)}")
-            # Log first 500 characters of response for debugging
-            response_text = resp.text[:500]
-            logger.info(f"📄 Response preview: {response_text}...")
             resp.raise_for_status()
     except httpx.HTTPStatusError as exc:
         logger.error(f"❌ HTTP error: {exc.response.status_code} - {exc.response.text}")
