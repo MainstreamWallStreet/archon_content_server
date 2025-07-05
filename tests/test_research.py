@@ -17,9 +17,9 @@ class TestResearchEndpoint:
         """Test that the endpoint returns 503 when environment variables are missing."""
         with patch("src.api.get_setting", side_effect=RuntimeError("Missing config")):
             response = client.post(
-                "/research", 
+                "/research",
                 json={"query": "test query", "flow_id": "test-flow-id"},
-                headers={"X-API-Key": "test-key"}
+                headers={"X-API-Key": "test-key"},
             )
             assert response.status_code == 503
             assert "ARCHON_API_KEY not configured" in response.json()["detail"]
@@ -55,13 +55,13 @@ class TestResearchEndpoint:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
                 "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/",
-                "ARCHON_API_KEY": "test-key"
+                "ARCHON_API_KEY": "test-key",
             }.get(key, default)
 
             response = client.post(
-                "/research", 
+                "/research",
                 json={"query": "test query", "flow_id": "test-flow-id"},
-                headers={"X-API-Key": "test-key"}
+                headers={"X-API-Key": "test-key"},
             )
 
             assert response.status_code == 200
@@ -91,13 +91,13 @@ class TestResearchEndpoint:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
                 "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/",
-                "ARCHON_API_KEY": "test-key"
+                "ARCHON_API_KEY": "test-key",
             }.get(key, default)
 
             response = client.post(
-                "/research", 
+                "/research",
                 json={"query": "test query", "flow_id": "test-flow-id"},
-                headers={"X-API-Key": "test-key"}
+                headers={"X-API-Key": "test-key"},
             )
 
             assert response.status_code == 500
@@ -132,13 +132,13 @@ class TestResearchEndpoint:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
                 "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/",
-                "ARCHON_API_KEY": "test-key"
+                "ARCHON_API_KEY": "test-key",
             }.get(key, default)
 
             response = client.post(
-                "/research", 
+                "/research",
                 json={"query": "test query", "flow_id": "test-flow-id"},
-                headers={"X-API-Key": "test-key"}
+                headers={"X-API-Key": "test-key"},
             )
 
             assert response.status_code == 200
@@ -180,13 +180,13 @@ class TestResearchEndpoint:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
                 "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/",
-                "ARCHON_API_KEY": "test-key"
+                "ARCHON_API_KEY": "test-key",
             }.get(key, default)
 
             response = client.post(
-                "/research", 
+                "/research",
                 json={"query": "test query", "flow_id": "test-flow-id"},
-                headers={"X-API-Key": "test-key"}
+                headers={"X-API-Key": "test-key"},
             )
 
             assert response.status_code == 200
