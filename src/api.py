@@ -18,9 +18,14 @@ from tempfile import mkdtemp
 from typing import Any
 
 import httpx
-from fastapi import FastAPI, HTTPException
+import logging
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 from src.config import get_setting
 from src.spreadsheet_builder import PlanGenerator, build_from_plan
@@ -28,8 +33,38 @@ from src.spreadsheet_builder import PlanGenerator, build_from_plan
 app = FastAPI(
     title="Archon Content Server",
     version="1.0.0",
-    description="API for LangFlow research integration and spreadsheet generation"
+    description="API for LangFlow research integration and spreadsheet generation. All endpoints require authentication via X-API-Key header."
 )
+
+# ============================================================================
+# AUTHENTICATION
+# ============================================================================
+
+async def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")) -> str:
+    """
+    Verify the API key from the request header.
+    
+    Args:
+        x_api_key: The API key from the X-API-Key header
+        
+    Returns:
+        str: The verified API key
+        
+    Raises:
+        HTTPException: 401 if API key is missing or invalid
+    """
+    try:
+        expected_api_key = get_setting("ARCHON_API_KEY")
+    except RuntimeError:
+        raise HTTPException(status_code=503, detail="ARCHON_API_KEY not configured")
+    
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="X-API-Key header is required")
+    
+    if x_api_key != expected_api_key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    
+    return x_api_key
 
 # ============================================================================
 # REQUEST/RESPONSE MODELS
@@ -63,6 +98,13 @@ class SpreadsheetRequest(BaseModel):
     )
 
 
+class VidReasonerRequest(BaseModel):
+    """Request model for video reasoning endpoint."""
+    input_value: str = Field(..., example="hello world!", description="The input value to be processed by the video reasoning flow")
+    output_type: str = Field(default="text", example="text", description="Specifies the expected output format")
+    input_type: str = Field(default="text", example="text", description="Specifies the input format")
+
+
 class ErrorResponse(BaseModel):
     """Error response model."""
     detail: str = Field(..., description="Error details")
@@ -77,7 +119,7 @@ class ErrorResponse(BaseModel):
     summary="Health Check",
     description="Check if the service is running and healthy."
 )
-def health_check():
+def health_check(api_key: str = Depends(verify_api_key)):
     """
     Health check endpoint.
     
@@ -117,7 +159,7 @@ def health_check():
     ```
     """
 )
-async def research(body: ResearchRequest) -> ResearchResponse:
+async def research(body: ResearchRequest, api_key: str = Depends(verify_api_key)) -> ResearchResponse:
     """
     Execute a LangFlow research flow and return the extracted answer.
     
@@ -156,8 +198,140 @@ async def research(body: ResearchRequest) -> ResearchResponse:
             resp = await client.post(flow_url, json=payload, headers=headers)
             resp.raise_for_status()
     except httpx.HTTPStatusError as exc:
+        logger.error(f"❌ HTTP error: {exc.response.status_code} - {exc.response.text}")
         raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text)
     except Exception as exc:
+        logger.error(f"❌ Request error: {exc}")
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    # 3️⃣ Extract the final answer from the LangFlow response structure
+    try:
+        data: Any = resp.json()
+        
+        if isinstance(data, dict):
+            # Navigate through the nested structure to find the actual text response
+            outputs = data.get("outputs", [])
+            if outputs and len(outputs) > 0:
+                first_output = outputs[0]
+                output_results = first_output.get("outputs", [])
+                if output_results and len(output_results) > 0:
+                    first_result = output_results[0]
+                    results = first_result.get("results", {})
+                    text_result = results.get("text", {})
+                    
+                    # Try to get the text from the most likely locations
+                    final_text = (
+                        text_result.get("data", {}).get("text") or  # Primary: data.text
+                        text_result.get("text") or  # Secondary: direct text field
+                        text_result.get("message") or  # Alternative: message field
+                        str(data)  # Fallback to string representation
+                    )
+                    
+                    if final_text and final_text != str(data):
+                        data = final_text
+                    else:
+                        data = str(data)
+                else:
+                    data = str(data)
+            else:
+                data = str(data)
+        else:
+            data = str(data)
+            
+    except ValueError:
+        data = resp.text
+
+    return ResearchResponse(result=data)
+
+
+@app.post(
+    "/vid-reasoner",
+    response_model=ResearchResponse,
+    summary="Execute Video Reasoning Flow",
+    description="""
+    Execute a video reasoning flow on the external LangFlow server.
+    
+    This endpoint:
+    1. Takes an input value and optional output/input type specifications
+    2. Sends the request to the configured LangFlow server using a specific flow ID
+    3. Extracts the final answer text from the complex response structure
+    4. Returns just the clean text response
+    
+    Environment Variables Required:
+    - LANGFLOW_SERVER_URL: Base URL for LangFlow server
+    - LANGFLOW_API_KEY: API key for LangFlow authentication
+    
+    Example:
+    ```json
+    {
+        "input_value": "hello world!",
+        "output_type": "text",
+        "input_type": "text"
+    }
+    ```
+    """
+)
+async def vid_reasoner(body: VidReasonerRequest, api_key: str = Depends(verify_api_key)) -> ResearchResponse:
+    """
+    Execute a LangFlow video reasoning flow and return the extracted answer.
+    
+    Args:
+        body: VidReasonerRequest containing input_value and optional type specifications
+        
+    Returns:
+        ResearchResponse: The extracted text response from LangFlow
+        
+    Raises:
+        HTTPException: 503 if configuration is missing, 500 for server errors
+    """
+    logger.info(f"🎥 Vid-reasoner endpoint called with input_value: '{body.input_value}'")
+    
+    # 1️⃣ Resolve configuration
+    try:
+        langflow_api_key = get_setting("LANGFLOW_API_KEY")
+        base_url = get_setting("LANGFLOW_SERVER_URL")
+        logger.info(f"✅ Configuration loaded - Base URL: {base_url}")
+        logger.info(f"🔑 LangFlow API Key: {langflow_api_key[:10]}..." if langflow_api_key else "❌ No LangFlow API key found")
+    except RuntimeError as exc:
+        logger.error(f"❌ Configuration error: {exc}")
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    # Use the specific flow ID for video reasoning
+    flow_id = "59ef78ef-195b-4534-9b38-21527c2c90d4"
+    flow_url = f"{base_url.rstrip('/')}/{flow_id}"
+    logger.info(f"🎯 Flow ID: {flow_id}")
+    logger.info(f"🌐 Full URL: {flow_url}")
+
+    payload = {
+        "input_value": body.input_value,
+        "output_type": body.output_type,
+        "input_type": body.input_type,
+    }
+    headers = {
+        "x-api-key": langflow_api_key,
+        "Content-Type": "application/json",
+    }
+    
+    logger.info(f"📦 Payload: {payload}")
+    logger.info(f"📋 Headers: {dict(headers)}")
+
+    # 2️⃣ Perform the request
+    logger.info(f"🚀 Making request to LangFlow...")
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            logger.info(f"📡 Sending POST to: {flow_url}")
+            resp = await client.post(flow_url, json=payload, headers=headers)
+            logger.info(f"📊 Response status: {resp.status_code}")
+            logger.info(f"📋 Response headers: {dict(resp.headers)}")
+            # Log first 500 characters of response for debugging
+            response_text = resp.text[:500]
+            logger.info(f"📄 Response preview: {response_text}...")
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        logger.error(f"❌ HTTP error: {exc.response.status_code} - {exc.response.text}")
+        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text)
+    except Exception as exc:
+        logger.error(f"❌ Request error: {exc}")
         raise HTTPException(status_code=503, detail=str(exc))
 
     # 3️⃣ Extract the final answer from the LangFlow response structure
@@ -225,7 +399,7 @@ async def research(body: ResearchRequest) -> ResearchResponse:
     """,
     response_class=FileResponse
 )
-async def generate_spreadsheet(body: SpreadsheetRequest):
+async def generate_spreadsheet(body: SpreadsheetRequest, api_key: str = Depends(verify_api_key)):
     """
     Generate an Excel workbook from natural language description.
     
@@ -280,7 +454,7 @@ async def generate_spreadsheet(body: SpreadsheetRequest):
     """,
     response_model=dict
 )
-async def generate_plan(body: SpreadsheetRequest):
+async def generate_plan(body: SpreadsheetRequest, api_key: str = Depends(verify_api_key)):
     """
     Generate a build plan from natural language without creating the Excel file.
     
