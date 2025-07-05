@@ -2,8 +2,6 @@
 Archon Content Server – FastAPI Application
 """
 
-
-
 # ---------------------------------------------------------------------------
 # openpyxl compatibility – iterate over DefinedName objects not keys
 # ---------------------------------------------------------------------------
