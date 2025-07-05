@@ -144,7 +144,7 @@ class ErrorResponse(BaseModel):
     summary="Health Check",
     description="Check if the service is running and healthy.",
 )
-def health_check(api_key: str = Depends(verify_api_key)):
+def health_check():
     """
     Health check endpoint.
 
