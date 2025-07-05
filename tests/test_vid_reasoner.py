@@ -18,10 +18,8 @@ class TestVidReasonerEndpoint:
         with patch("src.api.get_setting", side_effect=RuntimeError("Missing config")):
             response = client.post(
                 "/vid-reasoner",
-                json={
-                    "input_value": "hello world!"
-                },
-                headers={"X-API-Key": "test-key"}
+                json={"input_value": "hello world!"},
+                headers={"X-API-Key": "test-key"},
             )
             assert response.status_code == 503
             assert "ARCHON_API_KEY not configured" in response.json()["detail"]
@@ -32,7 +30,7 @@ class TestVidReasonerEndpoint:
         # Mock the async client
         mock_client = AsyncMock()
         mock_client_class.return_value.__aenter__.return_value = mock_client
-        
+
         # Mock the response with LangFlow structure
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
@@ -57,7 +55,7 @@ class TestVidReasonerEndpoint:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
                 "LANGFLOW_SERVER_URL": "https://langflow-455624753981.us-central1.run.app/api/v1/run/",
-                "ARCHON_API_KEY": "test-key"
+                "ARCHON_API_KEY": "test-key",
             }.get(key, default)
 
             response = client.post(
@@ -65,13 +63,15 @@ class TestVidReasonerEndpoint:
                 json={
                     "input_value": "hello world!",
                     "output_type": "text",
-                    "input_type": "text"
+                    "input_type": "text",
                 },
-                headers={"X-API-Key": "test-key"}
+                headers={"X-API-Key": "test-key"},
             )
-            
+
             assert response.status_code == 200
-            assert response.json() == {"result": "This is the video reasoning result from LangFlow"}
+            assert response.json() == {
+                "result": "This is the video reasoning result from LangFlow"
+            }
 
     @patch("httpx.AsyncClient")
     def test_vid_reasoner_endpoint_http_error(self, mock_client_class):
@@ -79,13 +79,13 @@ class TestVidReasonerEndpoint:
         # Mock the async client
         mock_client = AsyncMock()
         mock_client_class.return_value.__aenter__.return_value = mock_client
-        
+
         # Mock the response with HTTP error
         mock_response = MagicMock()
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "HTTP Error", 
-            request=MagicMock(), 
-            response=MagicMock(status_code=500, text="Internal Server Error")
+            "HTTP Error",
+            request=MagicMock(),
+            response=MagicMock(status_code=500, text="Internal Server Error"),
         )
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
@@ -95,17 +95,15 @@ class TestVidReasonerEndpoint:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
                 "LANGFLOW_SERVER_URL": "https://langflow-455624753981.us-central1.run.app/api/v1/run/",
-                "ARCHON_API_KEY": "test-key"
+                "ARCHON_API_KEY": "test-key",
             }.get(key, default)
 
             response = client.post(
                 "/vid-reasoner",
-                json={
-                    "input_value": "hello world!"
-                },
-                headers={"X-API-Key": "test-key"}
+                json={"input_value": "hello world!"},
+                headers={"X-API-Key": "test-key"},
             )
-            
+
             assert response.status_code == 500
             assert "Internal Server Error" in response.json()["detail"]
 
@@ -117,7 +115,7 @@ class TestVidReasonerEndpoint:
                 # Missing input_value
                 "output_type": "text"
             },
-            headers={"X-API-Key": "test-key"}
+            headers={"X-API-Key": "test-key"},
         )
         assert response.status_code == 401  # Unauthorized due to missing required field
         assert "Invalid API key" in response.json()["detail"]
@@ -128,7 +126,7 @@ class TestVidReasonerEndpoint:
         # Mock the async client
         mock_client = AsyncMock()
         mock_client_class.return_value.__aenter__.return_value = mock_client
-        
+
         # Mock the response with text
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
@@ -140,17 +138,15 @@ class TestVidReasonerEndpoint:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
                 "LANGFLOW_SERVER_URL": "https://langflow-455624753981.us-central1.run.app/api/v1/run/",
-                "ARCHON_API_KEY": "test-key"
+                "ARCHON_API_KEY": "test-key",
             }.get(key, default)
 
             response = client.post(
                 "/vid-reasoner",
-                json={
-                    "input_value": "hello world!"
-                },
-                headers={"X-API-Key": "test-key"}
+                json={"input_value": "hello world!"},
+                headers={"X-API-Key": "test-key"},
             )
-            
+
             assert response.status_code == 200
             assert response.json() == {"result": "Plain text response"}
 
@@ -160,7 +156,7 @@ class TestVidReasonerEndpoint:
         # Mock the async client
         mock_client = AsyncMock()
         mock_client_class.return_value.__aenter__.return_value = mock_client
-        
+
         # Mock the response with the actual LangFlow structure
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
@@ -174,15 +170,13 @@ class TestVidReasonerEndpoint:
                             "results": {
                                 "text": {
                                     "text": "Video reasoning analysis result",
-                                    "data": {
-                                        "text": "Video reasoning analysis result"
-                                    }
+                                    "data": {"text": "Video reasoning analysis result"},
                                 }
                             }
                         }
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
         mock_client.post.return_value = mock_response
 
@@ -190,17 +184,15 @@ class TestVidReasonerEndpoint:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
                 "LANGFLOW_SERVER_URL": "https://langflow-455624753981.us-central1.run.app/api/v1/run/",
-                "ARCHON_API_KEY": "test-key"
+                "ARCHON_API_KEY": "test-key",
             }.get(key, default)
 
             response = client.post(
                 "/vid-reasoner",
-                json={
-                    "input_value": "hello world!"
-                },
-                headers={"X-API-Key": "test-key"}
+                json={"input_value": "hello world!"},
+                headers={"X-API-Key": "test-key"},
             )
-            
+
             assert response.status_code == 200
             result = response.json()["result"]
             assert "Video reasoning analysis result" in result
@@ -211,7 +203,7 @@ class TestVidReasonerEndpoint:
             # Mock the async client
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
-            
+
             # Mock the response
             mock_response = MagicMock()
             mock_response.raise_for_status.return_value = None
@@ -221,9 +213,7 @@ class TestVidReasonerEndpoint:
                         "outputs": [
                             {
                                 "results": {
-                                    "text": {
-                                        "text": "Default values test result"
-                                    }
+                                    "text": {"text": "Default values test result"}
                                 }
                             }
                         ]
@@ -236,7 +226,7 @@ class TestVidReasonerEndpoint:
                 mock_get_setting.side_effect = lambda key, default=None: {
                     "LANGFLOW_API_KEY": "test-api-key",
                     "LANGFLOW_SERVER_URL": "https://langflow-455624753981.us-central1.run.app/api/v1/run/",
-                    "ARCHON_API_KEY": "test-key"
+                    "ARCHON_API_KEY": "test-key",
                 }.get(key, default)
 
                 response = client.post(
@@ -245,9 +235,9 @@ class TestVidReasonerEndpoint:
                         "input_value": "test input"
                         # output_type and input_type should default to "text"
                     },
-                    headers={"X-API-Key": "test-key"}
+                    headers={"X-API-Key": "test-key"},
                 )
-                
+
                 assert response.status_code == 200
                 assert response.json() == {"result": "Default values test result"}
 
@@ -257,23 +247,13 @@ class TestVidReasonerEndpoint:
         # Mock the async client
         mock_client = AsyncMock()
         mock_client_class.return_value.__aenter__.return_value = mock_client
-        
+
         # Mock the response
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
         mock_response.json.return_value = {
             "outputs": [
-                {
-                    "outputs": [
-                        {
-                            "results": {
-                                "text": {
-                                    "text": "Flow ID test result"
-                                }
-                            }
-                        }
-                    ]
-                }
+                {"outputs": [{"results": {"text": {"text": "Flow ID test result"}}}]}
             ]
         }
         mock_client.post.return_value = mock_response
@@ -282,21 +262,19 @@ class TestVidReasonerEndpoint:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
                 "LANGFLOW_SERVER_URL": "https://langflow-455624753981.us-central1.run.app/api/v1/run/",
-                "ARCHON_API_KEY": "test-key"
+                "ARCHON_API_KEY": "test-key",
             }.get(key, default)
 
             response = client.post(
                 "/vid-reasoner",
-                json={
-                    "input_value": "test input"
-                },
-                headers={"X-API-Key": "test-key"}
+                json={"input_value": "test input"},
+                headers={"X-API-Key": "test-key"},
             )
-            
+
             # Verify that the correct flow ID was used in the URL
             expected_url = "https://langflow-455624753981.us-central1.run.app/api/v1/run/59ef78ef-195b-4534-9b38-21527c2c90d4"
             mock_client.post.assert_called_once()
             call_args = mock_client.post.call_args
             assert call_args[0][0] == expected_url
-            
-            assert response.status_code == 200 
+
+            assert response.status_code == 200

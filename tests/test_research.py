@@ -17,14 +17,12 @@ class TestResearchEndpoint:
         """Test that the endpoint returns 503 when environment variables are missing."""
         with patch("src.api.get_setting", side_effect=RuntimeError("Missing config")):
             response = client.post(
-                "/research",
-                json={
-                    "query": "test query",
-                    "flow_id": "test-flow-id"
-                }
+                "/research", 
+                json={"query": "test query", "flow_id": "test-flow-id"},
+                headers={"X-API-Key": "test-key"}
             )
             assert response.status_code == 503
-            assert "Missing config" in response.json()["detail"]
+            assert "ARCHON_API_KEY not configured" in response.json()["detail"]
 
     @patch("httpx.AsyncClient")
     def test_research_endpoint_success(self, mock_client_class):
@@ -32,7 +30,7 @@ class TestResearchEndpoint:
         # Mock the async client
         mock_client = AsyncMock()
         mock_client_class.return_value.__aenter__.return_value = mock_client
-        
+
         # Mock the response with LangFlow structure
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
@@ -56,19 +54,20 @@ class TestResearchEndpoint:
         with patch("src.api.get_setting") as mock_get_setting:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
-                "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/"
+                "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/",
+                "ARCHON_API_KEY": "test-key"
             }.get(key, default)
 
             response = client.post(
-                "/research",
-                json={
-                    "query": "test query",
-                    "flow_id": "test-flow-id"
-                }
+                "/research", 
+                json={"query": "test query", "flow_id": "test-flow-id"},
+                headers={"X-API-Key": "test-key"}
             )
-            
+
             assert response.status_code == 200
-            assert response.json() == {"result": "This is the final answer from LangFlow"}
+            assert response.json() == {
+                "result": "This is the final answer from LangFlow"
+            }
 
     @patch("httpx.AsyncClient")
     def test_research_endpoint_http_error(self, mock_client_class):
@@ -76,13 +75,13 @@ class TestResearchEndpoint:
         # Mock the async client
         mock_client = AsyncMock()
         mock_client_class.return_value.__aenter__.return_value = mock_client
-        
+
         # Mock the response with HTTP error
         mock_response = MagicMock()
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "HTTP Error", 
-            request=MagicMock(), 
-            response=MagicMock(status_code=500, text="Internal Server Error")
+            "HTTP Error",
+            request=MagicMock(),
+            response=MagicMock(status_code=500, text="Internal Server Error"),
         )
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
@@ -91,17 +90,16 @@ class TestResearchEndpoint:
         with patch("src.api.get_setting") as mock_get_setting:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
-                "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/"
+                "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/",
+                "ARCHON_API_KEY": "test-key"
             }.get(key, default)
 
             response = client.post(
-                "/research",
-                json={
-                    "query": "test query",
-                    "flow_id": "test-flow-id"
-                }
+                "/research", 
+                json={"query": "test query", "flow_id": "test-flow-id"},
+                headers={"X-API-Key": "test-key"}
             )
-            
+
             assert response.status_code == 500
             assert "Internal Server Error" in response.json()["detail"]
 
@@ -112,7 +110,7 @@ class TestResearchEndpoint:
             json={
                 "query": "test query"
                 # Missing flow_id
-            }
+            },
         )
         assert response.status_code == 422  # Validation error
 
@@ -122,7 +120,7 @@ class TestResearchEndpoint:
         # Mock the async client
         mock_client = AsyncMock()
         mock_client_class.return_value.__aenter__.return_value = mock_client
-        
+
         # Mock the response with text
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
@@ -133,17 +131,16 @@ class TestResearchEndpoint:
         with patch("src.api.get_setting") as mock_get_setting:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
-                "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/"
+                "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/",
+                "ARCHON_API_KEY": "test-key"
             }.get(key, default)
 
             response = client.post(
-                "/research",
-                json={
-                    "query": "test query",
-                    "flow_id": "test-flow-id"
-                }
+                "/research", 
+                json={"query": "test query", "flow_id": "test-flow-id"},
+                headers={"X-API-Key": "test-key"}
             )
-            
+
             assert response.status_code == 200
             assert response.json() == {"result": "Plain text response"}
 
@@ -153,7 +150,7 @@ class TestResearchEndpoint:
         # Mock the async client
         mock_client = AsyncMock()
         mock_client_class.return_value.__aenter__.return_value = mock_client
-        
+
         # Mock the response with the actual LangFlow structure from the test
         mock_response = MagicMock()
         mock_response.raise_for_status.return_value = None
@@ -169,31 +166,30 @@ class TestResearchEndpoint:
                                     "text": "How We Think About Risk\n\n1. The working definition...",
                                     "data": {
                                         "text": "How We Think About Risk\n\n1. The working definition..."
-                                    }
+                                    },
                                 }
                             }
                         }
-                    ]
+                    ],
                 }
-            ]
+            ],
         }
         mock_client.post.return_value = mock_response
 
         with patch("src.api.get_setting") as mock_get_setting:
             mock_get_setting.side_effect = lambda key, default=None: {
                 "LANGFLOW_API_KEY": "test-api-key",
-                "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/"
+                "LANGFLOW_SERVER_URL": "http://test-server:7860/api/v1/run/",
+                "ARCHON_API_KEY": "test-key"
             }.get(key, default)
 
             response = client.post(
-                "/research",
-                json={
-                    "query": "test query",
-                    "flow_id": "test-flow-id"
-                }
+                "/research", 
+                json={"query": "test query", "flow_id": "test-flow-id"},
+                headers={"X-API-Key": "test-key"}
             )
-            
+
             assert response.status_code == 200
             result = response.json()["result"]
             assert "How We Think About Risk" in result
-            assert "working definition" in result 
+            assert "working definition" in result

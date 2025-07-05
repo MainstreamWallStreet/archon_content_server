@@ -17,6 +17,7 @@ def test_client():
     """Create a test client for the FastAPI app."""
     from fastapi.testclient import TestClient
     from src.api import app
+
     return TestClient(app)
 
 
@@ -25,7 +26,7 @@ def sample_research_request():
     """Sample research request data."""
     return {
         "query": "Explain quantum computing in simple terms.",
-        "flow_id": "af41bf0f-6ffb-4591-a276-8ae5f296da51"
+        "flow_id": "af41bf0f-6ffb-4591-a276-8ae5f296da51",
     }
 
 
@@ -34,7 +35,7 @@ def sample_spreadsheet_request():
     """Sample spreadsheet request data."""
     return {
         "objective": "Model FY-2024 revenue break-even analysis",
-        "data": "Revenue: 763.9M, Fixed Costs: 45M, Variable Cost %: 12%"
+        "data": "Revenue: 763.9M, Fixed Costs: 45M, Variable Cost %: 12%",
     }
 
 
@@ -53,11 +54,11 @@ def mock_langflow_response():
                                 "text": "This is the final answer from LangFlow",
                                 "data": {
                                     "text": "This is the final answer from LangFlow"
-                                }
+                                },
                             }
                         }
                     }
-                ]
+                ],
             }
-        ]
+        ],
     }
