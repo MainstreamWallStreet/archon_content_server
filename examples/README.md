@@ -6,7 +6,7 @@ This directory contains example scripts demonstrating how to use the Archon Cont
 
 ### `vid_reasoner_example.py`
 
-Demonstrates how to use the `/vid-reasoner` endpoint to process video reasoning requests.
+Demonstrates how to use the `/vid-reasoner` endpoint to process Value Investing Doctrine (VID) reasoning requests.
 
 **Prerequisites:**
 1. Set up your `.env` file with the required environment variables:

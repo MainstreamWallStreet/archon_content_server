@@ -108,11 +108,11 @@ curl -X POST "http://localhost:8080/research" \
 
 ---
 
-### 3. Video Reasoner Endpoint
+### 3. VID Reasoner Endpoint (Value Investing Doctrine)
 
 **POST** `/vid-reasoner`
 
-Execute a video reasoning flow on the external LangFlow server using a specific flow ID.
+Execute a Value Investing Doctrine (VID) reasoning flow on the external LangFlow server using a specific flow ID.
 
 #### Request Body
 
@@ -126,7 +126,7 @@ Execute a video reasoning flow on the external LangFlow server using a specific 
 
 | Field | Type | Required | Description |
 |:---|:---|:---|:---|
-| `input_value` | string | Yes | The input value to be processed by the video reasoning flow |
+| `input_value` | string | Yes | The input value to be processed by the VID reasoning flow |
 | `output_type` | string | No | Specifies the expected output format (default: "text") |
 | `input_type` | string | No | Specifies the input format (default: "text") |
 
@@ -134,7 +134,7 @@ Execute a video reasoning flow on the external LangFlow server using a specific 
 
 ```json
 {
-  "result": "Video reasoning analysis result from LangFlow"
+  "result": "Value Investing Doctrine analysis result from LangFlow"
 }
 ```
 
@@ -304,14 +304,14 @@ curl -X POST "http://localhost:8080/research" \
   }'
 ```
 
-### Complete Video Reasoning Workflow
+### Complete VID Workflow
 
 ```bash
 # 1. Check service health
 curl -X GET "http://localhost:8080/health" \
   -H "X-API-Key: your-secret-api-key"
 
-# 2. Execute video reasoning
+# 2. Execute VID reasoning
 curl -X POST "http://localhost:8080/vid-reasoner" \
   -H "X-API-Key: your-secret-api-key" \
   -H "Content-Type: application/json" \
@@ -372,7 +372,7 @@ response = requests.post(f"{BASE_URL}/research",
                         headers=HEADERS)
 print(response.json()["result"])
 
-# Video reasoning
+# VID reasoning
 vid_reasoner_data = {
     "input_value": "hello world!",
     "output_type": "text",
@@ -419,7 +419,7 @@ async function research(query, flowId) {
   return response.data.result;
 }
 
-// Video reasoning
+// VID reasoning
 async function videoReasoner(inputValue, outputType = 'text', inputType = 'text') {
   const response = await axios.post(`${BASE_URL}/vid-reasoner`, {
     input_value: inputValue,
@@ -489,5 +489,5 @@ For issues and questions:
 
 ## Version History
 
-- **v1.1.0**: Added video reasoning endpoint (`/vid-reasoner`)
+- **v1.1.0**: Added VID endpoint (`/vid-reasoner`)
 - **v1.0.0**: Initial release with LangFlow integration and spreadsheet generation 
