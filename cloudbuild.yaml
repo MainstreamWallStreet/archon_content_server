@@ -9,6 +9,7 @@ steps:
     args:
       - build
       - '--progress=plain'
+      - '--cache-from=${_REGION}-docker.pkg.dev/$PROJECT_ID/archon-content/archon-content:latest'
       - '-f'
       - Dockerfile
       - '-t'
@@ -81,5 +82,6 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
 
-timeout: '900s'
+timeout: '1800s'
