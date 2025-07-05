@@ -36,3 +36,33 @@ variable "openai_api_key" {
   type        = string
   sensitive   = true
 }
+
+# LangFlow Server URL
+variable "langflow_server_url" {
+  description = "URL of the LangFlow server for the application"
+  type        = string
+}
+
+# LangFlow API Key
+variable "langflow_api_key" {
+  description = "API key for accessing the LangFlow server"
+  type        = string
+  sensitive   = true
+}
+
+# Flow configuration
+variable "default_flow_type" {
+  description = "Default flow type for the application"
+  type        = string
+  default     = "generic_vid_reasoner"
+}
+
+variable "generic_vid_reasoner_flow_id" {
+  description = "Flow ID for generic VID reasoner"
+  type        = string
+}
+
+variable "vid_informed_research_flow_id" {
+  description = "Flow ID for VID informed research"
+  type        = string
+}

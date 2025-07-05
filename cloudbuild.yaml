@@ -1,6 +1,7 @@
 substitutions:
   _REGION: us-central1
   _SERVICE: archon-content-api
+  _LANGFLOW_SERVER_URL: https://langflow-455624753981.us-central1.run.app/api/v1/run/
 
 steps:
   # 1. Build image
@@ -43,9 +44,10 @@ steps:
       - '--concurrency=2'
       - '--timeout=300'
       - '--service-account=cloud-run-archon-content-sa@$PROJECT_ID.iam.gserviceaccount.com'
-      - '--set-env-vars=EXAMPLE_BUCKET=zergling-data,DEBUG=false,LOG_LEVEL=INFO'
+      - '--set-env-vars=EXAMPLE_BUCKET=zergling-data,DEBUG=false,LOG_LEVEL=INFO,LANGFLOW_SERVER_URL=${_LANGFLOW_SERVER_URL}'
       - '--set-secrets=ARCHON_API_KEY=archon-api-key:latest'
       - '--set-secrets=GOOGLE_APPLICATION_CREDENTIALS_JSON=archon-google-sa-value:latest'
+      - '--set-secrets=LANGFLOW_API_KEY=langflow-api-key:latest'
     waitFor: ['Push']
 
   # 4. Verify deployment

@@ -160,4 +160,17 @@ resource "google_secret_manager_secret" "openai_api_key" {
 resource "google_secret_manager_secret_version" "openai_api_key" {
   secret      = google_secret_manager_secret.openai_api_key.id
   secret_data = var.openai_api_key
+}
+
+# Secret Manager - LangFlow API Key
+resource "google_secret_manager_secret" "langflow_api_key" {
+  secret_id = "langflow-api-key"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "langflow_api_key" {
+  secret      = google_secret_manager_secret.langflow_api_key.id
+  secret_data = var.langflow_api_key
 } 
