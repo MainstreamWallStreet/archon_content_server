@@ -33,8 +33,11 @@ from dotenv import load_dotenv
 # 🔧  CLI
 # ────────────────────────────────
 
+
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Stream response from vid-reasoner endpoint")
+    parser = argparse.ArgumentParser(
+        description="Stream response from vid-reasoner endpoint"
+    )
     parser.add_argument("message", help="Input message to send to vid-reasoner")
     parser.add_argument(
         "--server",
@@ -47,6 +50,7 @@ def parse_args() -> argparse.Namespace:
 # ────────────────────────────────
 # 🚀  Main logic
 # ────────────────────────────────
+
 
 def main() -> None:
     args = parse_args()
@@ -75,7 +79,9 @@ def main() -> None:
     print(f"📡 Requesting streaming response from {url}\n")
 
     try:
-        with requests.post(url, json=payload, headers=headers, stream=True, timeout=60) as resp:
+        with requests.post(
+            url, json=payload, headers=headers, stream=True, timeout=60
+        ) as resp:
             resp.raise_for_status()
             for chunk in resp.iter_content(chunk_size=None):
                 if chunk:
@@ -92,4 +98,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main() 
+    main()

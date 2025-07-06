@@ -282,7 +282,7 @@ class TestVidReasonerEndpoint:
     @patch("httpx.AsyncClient")
     def test_vid_reasoner_endpoint_streaming(self, mock_client_class):
         """Test vid-reasoner endpoint streaming response when stream flag is True."""
-        
+
         # --- Prepare mock stream context manager ----
         class MockStreamContext:
             def __init__(self):
@@ -337,13 +337,7 @@ class TestVidReasonerEndpoint:
         mock_response.raise_for_status.return_value = None
         mock_response.json.return_value = {
             "outputs": [
-                {
-                    "outputs": [
-                        {
-                            "results": {"text": {"text": "chat history result"}}
-                        }
-                    ]
-                }
+                {"outputs": [{"results": {"text": {"text": "chat history result"}}}]}
             ]
         }
         mock_client.post.return_value = mock_response

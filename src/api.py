@@ -128,7 +128,7 @@ class VidReasonerRequest(BaseModel):
 
     chat_history: list[dict[str, str]] | None = Field(
         default=None,
-        description="Optional chat history to provide conversational context. Each list item should contain a role (\"user\" or \"assistant\") and the corresponding content.",
+        description='Optional chat history to provide conversational context. Each list item should contain a role ("user" or "assistant") and the corresponding content.',
         example=[
             {"role": "user", "content": "Hello"},
             {"role": "assistant", "content": "Hi! How can I help you today?"},
@@ -379,7 +379,9 @@ async def vid_reasoner(
         async def stream_langflow():
             try:
                 async with httpx.AsyncClient(timeout=None) as client:
-                    async with client.stream("POST", flow_url, json=payload, headers=headers) as resp:
+                    async with client.stream(
+                        "POST", flow_url, json=payload, headers=headers
+                    ) as resp:
                         resp.raise_for_status()
                         async for chunk in resp.aiter_bytes():
                             yield chunk
