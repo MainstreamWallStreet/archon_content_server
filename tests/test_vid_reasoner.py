@@ -278,3 +278,98 @@ class TestVidReasonerEndpoint:
             assert call_args[0][0] == expected_url
 
             assert response.status_code == 200
+
+    @patch("httpx.AsyncClient")
+    def test_vid_reasoner_endpoint_streaming(self, mock_client_class):
+        """Test vid-reasoner endpoint streaming response when stream flag is True."""
+        
+        # --- Prepare mock stream context manager ----
+        class MockStreamContext:
+            def __init__(self):
+                self.status_code = 200
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                pass
+
+            async def aiter_bytes(self):
+                # Simulate two chunks from LangFlow
+                yield b"chunk1 "
+                yield b"chunk2"
+
+            def raise_for_status(self):
+                return None
+
+        # Mock the async client instance
+        mock_client = AsyncMock()
+        # httpx.AsyncClient.stream is a synchronous method that returns an async context manager.
+        mock_client.stream = MagicMock(return_value=MockStreamContext())
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+
+        with patch("src.api.get_setting") as mock_get_setting:
+            mock_get_setting.side_effect = lambda key, default=None: {
+                "LANGFLOW_API_KEY": "test-api-key",
+                "LANGFLOW_SERVER_URL": "https://langflow-455624753981.us-central1.run.app/api/v1/run/",
+                "ARCHON_API_KEY": "test-key",
+            }.get(key, default)
+
+            response = client.post(
+                "/vid-reasoner",
+                json={"input_value": "hello world!", "stream": True},
+                headers={"X-API-Key": "test-key"},
+            )
+
+            assert response.status_code == 200
+            # The TestClient aggregates the streaming response content
+            assert response.content == b"chunk1 chunk2"
+
+    @patch("httpx.AsyncClient")
+    def test_vid_reasoner_endpoint_chat_history(self, mock_client_class):
+        """Ensure chat_history is forwarded to LangFlow payload."""
+
+        mock_client = AsyncMock()
+        mock_client_class.return_value.__aenter__.return_value = mock_client
+
+        # Prepare mock response
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "outputs": [
+                {
+                    "outputs": [
+                        {
+                            "results": {"text": {"text": "chat history result"}}
+                        }
+                    ]
+                }
+            ]
+        }
+        mock_client.post.return_value = mock_response
+
+        history = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi, how can I help?"},
+        ]
+
+        with patch("src.api.get_setting") as mock_get_setting:
+            mock_get_setting.side_effect = lambda key, default=None: {
+                "LANGFLOW_API_KEY": "test-api-key",
+                "LANGFLOW_SERVER_URL": "https://langflow-455624753981.us-central1.run.app/api/v1/run/",
+                "ARCHON_API_KEY": "test-key",
+            }.get(key, default)
+
+            response = client.post(
+                "/vid-reasoner",
+                json={"input_value": "What's up?", "chat_history": history},
+                headers={"X-API-Key": "test-key"},
+            )
+
+            assert response.status_code == 200
+            assert response.json() == {"result": "chat history result"}
+
+            # Ensure chat_history forwarded
+            mock_client.post.assert_called_once()
+            payload_sent = mock_client.post.call_args.kwargs["json"]
+            assert payload_sent["chat_history"] == history

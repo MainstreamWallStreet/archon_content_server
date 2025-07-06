@@ -20,7 +20,7 @@ from typing import Any
 import httpx
 import logging
 from fastapi import FastAPI, HTTPException, Depends, Header
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from src.config import get_setting
@@ -124,6 +124,17 @@ class VidReasonerRequest(BaseModel):
     )
     input_type: str = Field(
         default="text", example="text", description="Specifies the input format"
+    )
+
+    chat_history: list[dict[str, str]] | None = Field(
+        default=None,
+        description="Optional chat history as list of {role, content} messages for conversational context.",
+    )
+
+    # Add optional stream flag
+    stream: bool = Field(
+        default=False,
+        description="If true, the response will be streamed back to the client.",
     )
 
 
@@ -302,7 +313,7 @@ async def research(
 )
 async def vid_reasoner(
     body: VidReasonerRequest, api_key: str = Depends(verify_api_key)
-) -> ResearchResponse:
+) -> ResearchResponse | StreamingResponse:
     """
     Execute a LangFlow video reasoning flow and return the extracted answer.
 
@@ -310,7 +321,7 @@ async def vid_reasoner(
         body: VidReasonerRequest containing input_value and optional type specifications
 
     Returns:
-        ResearchResponse: The extracted text response from LangFlow
+        ResearchResponse | StreamingResponse: The extracted text response from LangFlow or a streaming response
 
     Raises:
         HTTPException: 503 if configuration is missing, 500 for server errors
@@ -332,10 +343,42 @@ async def vid_reasoner(
         "output_type": body.output_type,
         "input_type": body.input_type,
     }
+    if body.chat_history:
+        payload["chat_history"] = body.chat_history
     headers = {
         "x-api-key": langflow_api_key,
         "Content-Type": "application/json",
     }
+
+    # If streaming requested, return StreamingResponse directly
+    if body.stream:
+        logger.info("🚀 Streaming response from LangFlow...")
+
+        async def stream_langflow():
+            try:
+                async with httpx.AsyncClient(timeout=None) as client:
+                    async with client.stream("POST", flow_url, json=payload, headers=headers) as resp:
+                        resp.raise_for_status()
+                        async for chunk in resp.aiter_bytes():
+                            yield chunk
+            except httpx.HTTPStatusError as exc:
+                logger.error(
+                    f"❌ HTTP error while streaming: {exc.response.status_code} - {exc.response.text}"
+                )
+                # Propagate the error details to the client in the stream
+                yield exc.response.text.encode()
+            except Exception as exc:
+                logger.error(f"❌ Streaming request error: {exc}")
+                yield str(exc).encode()
+
+        # Import here to avoid circular import at top
+        from fastapi.responses import StreamingResponse
+
+        return StreamingResponse(stream_langflow(), media_type="application/json")
+
+    # ==============================
+    # Non-streaming logic (existing)
+    # ==============================
 
     # 2️⃣ Perform the request
     logger.info("🚀 Making request to LangFlow...")
