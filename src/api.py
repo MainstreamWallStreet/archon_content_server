@@ -20,7 +20,7 @@ from typing import Any
 import httpx
 import logging
 from fastapi import FastAPI, HTTPException, Depends, Header
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from src.config import get_setting
@@ -124,6 +124,22 @@ class VidReasonerRequest(BaseModel):
     )
     input_type: str = Field(
         default="text", example="text", description="Specifies the input format"
+    )
+
+    chat_history: list[dict[str, str]] | None = Field(
+        default=None,
+        description='Optional chat history to provide conversational context. Each list item should contain a role ("user" or "assistant") and the corresponding content.',
+        example=[
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi! How can I help you today?"},
+        ],
+    )
+
+    # Add optional stream flag
+    stream: bool = Field(
+        default=False,
+        description="If true, the response will be streamed back to the client in real-time chunks.",
+        example=True,
     )
 
 
@@ -299,10 +315,27 @@ async def research(
     }
     ```
     """,
+    responses={
+        200: {
+            "model": ResearchResponse,
+            "description": "Successful JSON response when stream=false",
+        },
+        206: {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "string",
+                        "description": "Streamed JSON chunks when stream=true",
+                    }
+                }
+            },
+            "description": "Streaming response (partial content) when stream=true",
+        },
+    },
 )
 async def vid_reasoner(
     body: VidReasonerRequest, api_key: str = Depends(verify_api_key)
-) -> ResearchResponse:
+) -> ResearchResponse | StreamingResponse:
     """
     Execute a LangFlow video reasoning flow and return the extracted answer.
 
@@ -310,7 +343,7 @@ async def vid_reasoner(
         body: VidReasonerRequest containing input_value and optional type specifications
 
     Returns:
-        ResearchResponse: The extracted text response from LangFlow
+        ResearchResponse | StreamingResponse: The extracted text response from LangFlow or a streaming response
 
     Raises:
         HTTPException: 503 if configuration is missing, 500 for server errors
@@ -332,10 +365,44 @@ async def vid_reasoner(
         "output_type": body.output_type,
         "input_type": body.input_type,
     }
+    if body.chat_history:
+        payload["chat_history"] = body.chat_history
     headers = {
         "x-api-key": langflow_api_key,
         "Content-Type": "application/json",
     }
+
+    # If streaming requested, return StreamingResponse directly
+    if body.stream:
+        logger.info("🚀 Streaming response from LangFlow...")
+
+        async def stream_langflow():
+            try:
+                async with httpx.AsyncClient(timeout=None) as client:
+                    async with client.stream(
+                        "POST", flow_url, json=payload, headers=headers
+                    ) as resp:
+                        resp.raise_for_status()
+                        async for chunk in resp.aiter_bytes():
+                            yield chunk
+            except httpx.HTTPStatusError as exc:
+                logger.error(
+                    f"❌ HTTP error while streaming: {exc.response.status_code} - {exc.response.text}"
+                )
+                # Propagate the error details to the client in the stream
+                yield exc.response.text.encode()
+            except Exception as exc:
+                logger.error(f"❌ Streaming request error: {exc}")
+                yield str(exc).encode()
+
+        # Import here to avoid circular import at top
+        from fastapi.responses import StreamingResponse
+
+        return StreamingResponse(stream_langflow(), media_type="application/json")
+
+    # ==============================
+    # Non-streaming logic (existing)
+    # ==============================
 
     # 2️⃣ Perform the request
     logger.info("🚀 Making request to LangFlow...")
