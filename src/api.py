@@ -128,13 +128,18 @@ class VidReasonerRequest(BaseModel):
 
     chat_history: list[dict[str, str]] | None = Field(
         default=None,
-        description="Optional chat history as list of {role, content} messages for conversational context.",
+        description="Optional chat history to provide conversational context. Each list item should contain a role (\"user\" or \"assistant\") and the corresponding content.",
+        example=[
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi! How can I help you today?"},
+        ],
     )
 
     # Add optional stream flag
     stream: bool = Field(
         default=False,
-        description="If true, the response will be streamed back to the client.",
+        description="If true, the response will be streamed back to the client in real-time chunks.",
+        example=True,
     )
 
 
@@ -310,6 +315,23 @@ async def research(
     }
     ```
     """,
+    responses={
+        200: {
+            "model": ResearchResponse,
+            "description": "Successful JSON response when stream=false",
+        },
+        206: {
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "string",
+                        "description": "Streamed JSON chunks when stream=true",
+                    }
+                }
+            },
+            "description": "Streaming response (partial content) when stream=true",
+        },
+    },
 )
 async def vid_reasoner(
     body: VidReasonerRequest, api_key: str = Depends(verify_api_key)
