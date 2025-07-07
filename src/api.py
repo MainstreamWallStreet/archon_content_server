@@ -199,6 +199,7 @@ def health_check():
     }
     ```
     """,
+    include_in_schema=False,
 )
 async def research(
     body: ResearchRequest, api_key: str = Depends(verify_api_key)
@@ -215,7 +216,10 @@ async def research(
     Raises:
         HTTPException: 503 if configuration is missing, 500 for server errors
     """
-    # 1️⃣ Resolve configuration
+    # ❌ Endpoint deprecated/removed
+    raise HTTPException(status_code=410, detail="Endpoint removed")
+
+    # 1️⃣ Resolve configuration (legacy code below, retained for reference)
     try:
         api_key = get_setting("LANGFLOW_API_KEY")
         base_url = get_setting("LANGFLOW_SERVER_URL")
@@ -332,6 +336,7 @@ async def research(
             "description": "Streaming response (partial content) when stream=true",
         },
     },
+    include_in_schema=False,
 )
 async def vid_reasoner(
     body: VidReasonerRequest, api_key: str = Depends(verify_api_key)
@@ -348,7 +353,10 @@ async def vid_reasoner(
     Raises:
         HTTPException: 503 if configuration is missing, 500 for server errors
     """
-    # 1️⃣ Resolve configuration
+    # ❌ Endpoint deprecated/removed
+    raise HTTPException(status_code=410, detail="Endpoint removed")
+
+    # 1️⃣ Resolve configuration (legacy code below, retained for reference)
     try:
         langflow_api_key = get_setting("LANGFLOW_API_KEY")
         base_url = get_setting("LANGFLOW_SERVER_URL")
