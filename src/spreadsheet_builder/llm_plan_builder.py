@@ -13,6 +13,7 @@ import json
 import logging
 import os
 from typing import Any, Dict
+from datetime import datetime, timezone
 
 from langchain_openai import ChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
@@ -84,12 +85,17 @@ class PlanGenerator:
             )
         )
 
+        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
         user_content = (
             "OBJECTIVE:\n"
             + objective.strip()
             + "\n\n"
             + "DATA:\n"
             + (plaintext_data.strip() or "(none)")
+            + "\n\nNOTE: Current datetime is "
+            + now_iso
+            + " (provided for any relative time references)."
         )
         human = HumanMessage(content=user_content)
 
